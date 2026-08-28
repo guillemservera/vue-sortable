@@ -2,8 +2,7 @@ import type { SortableMotion } from './types'
 
 export const DEFAULT_IGNORE_SELECTOR = 'button,input,textarea,select,a,[contenteditable="true"],[data-sortable-ignore]'
 export const DEFAULT_ACTIVATION_THRESHOLD = 4
-export const PREVIEW_INDEX_BIAS_RATIO = 0.15
-export const PREVIEW_INDEX_BIAS_MAX = 8
+export const DEFAULT_OVERLAP = 0.5
 
 export const DEFAULT_MOTION = {
   list: {

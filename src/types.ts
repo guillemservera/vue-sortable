@@ -4,7 +4,11 @@ export type SortableOrientation = 'vertical' | 'horizontal'
 
 export type SortableBehavior = 'insert'
 
-export type SortableCollision = 'center' | 'biased-center'
+export type SortableCollision = 'overlap' | 'center'
+
+export type SortableLayout = 'axis' | 'flow'
+
+export type SortableGroup = string | { name: string }
 
 export type SortableActivation = {
   threshold?: number
@@ -35,21 +39,29 @@ export type SortableCanMovePayload<T = unknown> = {
   from: number
   to: number
   items: T[]
+  fromList?: string
+  toList?: string
+  group?: string
 }
 
 export type SortableProps<T = unknown> = {
   modelValue: T[]
   itemKey: SortableItemKey<T>
+  listId?: string
   as?: string
   disabled?: boolean
   orientation?: SortableOrientation
+  layout?: SortableLayout
   behavior?: SortableBehavior
   collision?: SortableCollision
+  group?: SortableGroup
+  overlap?: number
   activation?: SortableActivation
   handle?: string
   ignore?: string
   motion?: SortableMotion
   canMove?: (payload: SortableCanMovePayload<T>) => boolean
+  canDrop?: (payload: SortableCanMovePayload<T>) => boolean
 }
 
 export type SortableDragPayload<T = unknown> = {
@@ -57,6 +69,9 @@ export type SortableDragPayload<T = unknown> = {
   key: string
   from: number
   to: number
+  fromList?: string
+  toList?: string
+  group?: string
 }
 
 export type SortableMovePayload<T = unknown> = SortableDragPayload<T> & {

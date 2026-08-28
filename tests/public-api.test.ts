@@ -37,8 +37,14 @@ describe('public API contract', () => {
       modelValue: Item[]
       itemKey: keyof Item | ((item: Item) => string | number)
       canMove?: (payload: SortableCanMovePayload<Item>) => boolean
+      group?: string | { name: string }
+      layout?: 'axis' | 'flow'
+      overlap?: number
       motion?: SortableMotion
     }>()
+    expectTypeOf<SortableDragPayload<Item>>().toHaveProperty('fromList').toEqualTypeOf<string | undefined>()
+    expectTypeOf<SortableDragPayload<Item>>().toHaveProperty('toList').toEqualTypeOf<string | undefined>()
+    expectTypeOf<SortableDragPayload<Item>>().toHaveProperty('group').toEqualTypeOf<string | undefined>()
     expectTypeOf<SortableDragPayload<Item>>().toHaveProperty('to').toEqualTypeOf<number>()
     expectTypeOf<SortableProps<Item>>().not.toHaveProperty('class')
     expectTypeOf<SortableProps<Item>>().not.toHaveProperty('listClass')

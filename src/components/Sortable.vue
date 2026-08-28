@@ -1,7 +1,7 @@
 <script setup lang="ts" generic="T = unknown">
 import { computed, normalizeClass, shallowRef, useAttrs } from 'vue'
 import type { SortableProps } from '../types'
-import { DEFAULT_IGNORE_SELECTOR, DEFAULT_MOTION } from '../constants'
+import { DEFAULT_IGNORE_SELECTOR, DEFAULT_MOTION, DEFAULT_OVERLAP } from '../constants'
 import { useSortableList } from '../composables/useSortableList'
 import type {
   SortableDefaultSlotProps,
@@ -15,14 +15,16 @@ defineOptions({
 })
 
 const props = withDefaults(defineProps<SortableProps<T>>(), {
-  activation: () => ({ threshold: 4 }),
-  as: 'div',
-  behavior: 'insert',
-  collision: 'biased-center',
-  disabled: false,
-  ignore: DEFAULT_IGNORE_SELECTOR,
-  motion: () => DEFAULT_MOTION,
-  orientation: 'vertical',
+	activation: () => ({ threshold: 4 }),
+	as: 'div',
+	behavior: 'insert',
+	collision: 'overlap',
+	disabled: false,
+	ignore: DEFAULT_IGNORE_SELECTOR,
+	layout: 'axis',
+	motion: () => DEFAULT_MOTION,
+	orientation: 'vertical',
+	overlap: DEFAULT_OVERLAP,
 })
 
 const emit = defineEmits<{
@@ -69,13 +71,41 @@ defineExpose({
 </script>
 
 <template>
+  <div
+    v-if="props.as === 'div'"
+    ref="rootRef"
+    v-bind="forwardedAttrs"
+    :data-vuesortable-disabled="props.disabled ? 'true' : 'false'"
+    :data-vuesortable-dragging="sortable.isDragging.value ? 'true' : 'false'"
+    :data-vuesortable-dropping="sortable.isDropping.value ? 'true' : 'false'"
+    :data-vuesortable-layout="props.layout"
+    :data-vuesortable-orientation="props.orientation"
+    :class="rootClass"
+    :style="rootStyle"
+    data-vuesortable-root
+  >
+    <slot v-bind="sortable.getDefaultSlotProps()" />
+
+    <div
+      :style="sortable.liveRegionStyle"
+      aria-atomic="true"
+      aria-live="polite"
+      data-vuesortable-live-region
+      role="status"
+    >
+      {{ sortable.announcement.value }}
+    </div>
+  </div>
+
   <component
+    v-else
     :is="props.as"
     ref="rootRef"
     v-bind="forwardedAttrs"
     :data-vuesortable-disabled="props.disabled ? 'true' : 'false'"
     :data-vuesortable-dragging="sortable.isDragging.value ? 'true' : 'false'"
     :data-vuesortable-dropping="sortable.isDropping.value ? 'true' : 'false'"
+    :data-vuesortable-layout="props.layout"
     :data-vuesortable-orientation="props.orientation"
     :class="rootClass"
     :style="rootStyle"
