@@ -6,7 +6,7 @@
     "moduleResolution": "Bundler",
     "baseUrl": ".",
     "paths": {
-      "vuesortable": [
+      "@guillemservera/vue-sortable": [
         "./src/index.ts"
       ]
     },

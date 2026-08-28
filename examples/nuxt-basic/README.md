@@ -1,6 +1,6 @@
 # VueSortable Nuxt 4 SSR Fixture
 
-This fixture verifies that `vuesortable` works in a Nuxt 4 app with SSR enabled.
+This fixture verifies that `@guillemservera/vue-sortable` works in a Nuxt 4 app with SSR enabled.
 
 It intentionally does not use:
 
@@ -17,7 +17,7 @@ From the repository root:
 ```bash
 pnpm install
 pnpm build
-pnpm --filter @vuesortable/nuxt-basic dev
+pnpm --filter @vue-sortable/nuxt-basic dev
 ```
 
 ## SSR verification

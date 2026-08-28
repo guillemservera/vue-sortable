@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { Sortable } from 'vuesortable'
+import { Sortable } from '@guillemservera/vue-sortable'
 
 const items = ref([
   { id: 'todo', label: 'Todo' },

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { Sortable } from 'vuesortable'
-import type { SortableCanMovePayload } from 'vuesortable'
+import { Sortable } from '@guillemservera/vue-sortable'
+import type { SortableCanMovePayload } from '@guillemservera/vue-sortable'
 
 type Item = {
   id: string

@@ -6,7 +6,7 @@ export default defineConfig({
   plugins: [vue()],
   resolve: {
     alias: {
-      vuesortable: fileURLToPath(new URL('../src/index.ts', import.meta.url)),
+      '@guillemservera/vue-sortable': fileURLToPath(new URL('../src/index.ts', import.meta.url)),
     },
   },
 })

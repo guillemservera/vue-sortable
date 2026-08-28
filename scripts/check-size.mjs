@@ -1,8 +1,8 @@
 import { readFile } from 'node:fs/promises'
 import { gzipSync } from 'node:zlib'
 
-const maxRawBytes = 17 * 1024
-const maxGzipBytes = 6 * 1024
+const maxRawBytes = 40 * 1024
+const maxGzipBytes = 11 * 1024
 
 const source = await readFile(new URL('../dist/index.js', import.meta.url))
 const rawBytes = source.byteLength

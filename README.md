@@ -2,11 +2,11 @@
 
 Headless-first sortable primitives for Vue 3.
 
-VueSortable is not a SortableJS wrapper. It is a Vue-native primitive for single-list reordering where you own the markup, layout, styles, and visual treatment.
+VueSortable is not a SortableJS wrapper. It is a Vue-native primitive for axis-first reordering where you own the markup, layout, styles, and visual treatment.
 
 ## Status
 
-VueSortable is currently in an early `0.x` release. The `0.1.0` contract is intentionally small: one component, reorder utilities, and public TypeScript types.
+VueSortable is currently in an early `0.x` release. The stable paths are axis reordering (single-list vertical/horizontal lists and grouped axis lists) and wrapped `flow` rows (chip bars and tag lists that wrap across lines). Flow is still not a SortableJS-style freeform/grid replacement.
 
 Nuxt 4 SSR compatibility is validated with a dedicated fixture under `examples/nuxt-basic`.
 
@@ -20,7 +20,7 @@ The primitive handles sorting state, geometry, pointer events, placeholder place
 
 - Vue 3.5+ component API.
 - Dependency-free runtime, with `vue` as the only peer dependency.
-- Single-list reorder with controlled `v-model`.
+- Single-list and grouped axis reorder with controlled `v-model`.
 - Vertical and horizontal orientation.
 - Handle and ignore selectors.
 - Keyboard reordering through returned handle attrs.
@@ -32,11 +32,11 @@ The primitive handles sorting state, geometry, pointer events, placeholder place
 ## Installation
 
 ```bash
-npm install vuesortable
+npm install @guillemservera/vue-sortable
 ```
 
 ```bash
-pnpm add vuesortable
+pnpm add @guillemservera/vue-sortable
 ```
 
 ## Quick Start
@@ -44,7 +44,7 @@ pnpm add vuesortable
 ```vue
 <script setup lang="ts">
 import { ref } from 'vue'
-import { Sortable } from 'vuesortable'
+import { Sortable } from '@guillemservera/vue-sortable'
 
 const items = ref([
   { id: 'todo', label: 'Todo' },
@@ -156,16 +156,21 @@ export type * from './types'
 | --- | --- | --- |
 | `modelValue` | `T[]` | required |
 | `itemKey` | `((item: T) => string \| number) \| keyof T` | required |
+| `listId` | `string` | generated internal id |
 | `as` | `string` | `'div'` |
 | `disabled` | `boolean` | `false` |
 | `orientation` | `'vertical' \| 'horizontal'` | `'vertical'` |
+| `layout` | `'axis' \| 'flow'` | `'axis'` |
 | `behavior` | `'insert'` | `'insert'` |
-| `collision` | `'center' \| 'biased-center'` | `'biased-center'` |
+| `collision` | `'overlap' \| 'center'` | `'overlap'` |
+| `group` | `string \| { name: string }` | `undefined` |
+| `overlap` | `number` | `0.5` |
 | `activation` | `{ threshold?: number, delay?: number, delayOnTouchOnly?: boolean }` | `{ threshold: 4 }` |
 | `handle` | `string` | `undefined` |
 | `ignore` | `string` | `button,input,textarea,select,a,[contenteditable="true"],[data-sortable-ignore]` |
 | `motion` | `false \| SortableMotion` | FLIP list and snap drop motion |
 | `canMove` | `(payload: SortableCanMovePayload<T>) => boolean` | `undefined` |
+| `canDrop` | `(payload: SortableCanMovePayload<T>) => boolean` | `undefined` |
 
 `class` and `style` are normal Vue attrs and are applied to the root element. They are not typed as props.
 
@@ -178,13 +183,66 @@ export type * from './types'
 | Event | Payload |
 | --- | --- |
 | `update:modelValue` | `T[]` |
-| `drag-start` | `{ item: T, key: string, from: number, to: number }` |
-| `drag-move` | `{ item: T, key: string, from: number, to: number, activeIndex: number, pointer: { x: number, y: number } }` |
-| `reorder` | `{ item: T, key: string, from: number, to: number }` |
-| `drag-end` | `{ item: T, key: string, from: number, to: number }` |
-| `drag-cancel` | `{ item: T, key: string, from: number, to: number }` |
+| `drag-start` | `{ item: T, key: string, from: number, to: number, fromList?: string, toList?: string, group?: string }` |
+| `drag-move` | `{ item: T, key: string, from: number, to: number, activeIndex: number, pointer: { x: number, y: number }, fromList?: string, toList?: string, group?: string }` |
+| `reorder` | `{ item: T, key: string, from: number, to: number, fromList?: string, toList?: string, group?: string }` |
+| `drag-end` | `{ item: T, key: string, from: number, to: number, fromList?: string, toList?: string, group?: string }` |
+| `drag-cancel` | `{ item: T, key: string, from: number, to: number, fromList?: string, toList?: string, group?: string }` |
 
 `reorder` is emitted only when the model changes. `drag-end` is emitted after an active drag ends, even if the item returns to its original position.
+
+### Collision
+
+`collision="overlap"` is the default. It opens the placeholder when the dragged overlay overlaps the neighboring item by the `overlap` ratio of that neighbor's size. The default `overlap` is `0.5`, so equal-sized items reorder at half overlap. The threshold is calculated from the active overlay size and the neighboring item size, so mixed-size lists adapt automatically.
+
+Increase `overlap` to require more overlap before the placeholder moves, for example `0.55` for a slightly later reorder. Values are clamped to the `0..1` range. Use `collision="center"` only when you explicitly want strict overlay-center to item-center crossing.
+
+```vue
+<Sortable
+  v-model="items"
+  item-key="id"
+  collision="overlap"
+  :overlap="0.55"
+/>
+```
+
+### Layouts
+
+`layout="axis"` is the default and treats the list as one vertical or horizontal line. Use it for columns, single-row rails, and horizontally scrollable strips.
+
+Use `layout="flow"` for wrapped rows (chip bars, tag lists). Flow layout uses the same DOM order, item attrs, placeholder, and overlay contracts, but measures visual rows and lets the overlay move on both axes. Rows are selected by the cursor's position (so off-centre grabs still aim the row you point at), while in-line placement uses the overlay body with the same direction-aware `overlap` thresholds as axis layouts — a flow row feels identical to a rail, including mid-drag direction reversals. The placeholder's live rect participates in the row mapping (it is a stable dead zone, and rows it occupies alone still count), and the index only retargets while the pointer is inside a row band, so wrap reflows cannot oscillate. Static inline siblings sharing the wrap (labels, add buttons) are tolerated: they affect wrapping but never receive insertions. It does not model dense grids, variable-span dashboards, or SortableJS `direction="auto"` semantics.
+
+```vue
+<Sortable
+  v-model="filters"
+  item-key="id"
+  orientation="horizontal"
+  layout="flow"
+  :overlap="0.55"
+/>
+```
+
+### Groups
+
+Set the same `group` on multiple sortables to allow moving items between those lists. Grouped lists must use the same item type, orientation, and layout mode. Pass a stable `listId` for each grouped list when you need durable payloads or tests. Each list still owns its own `v-model`; when an item moves across lists, VueSortable emits `update:modelValue` on the source and target lists, then emits the source list's drag/reorder events with `fromList`, `toList`, and `group` populated.
+
+Use `canMove` to let the source list reject a move and `canDrop` to let a target grouped list reject an incoming item. Both hooks receive the same payload shape; `items` is the current model for the list whose hook is running.
+
+```vue
+<Sortable
+  v-model="entryRules"
+  item-key="id"
+  list-id="entry-rules"
+  group="strategy-rules"
+/>
+
+<Sortable
+  v-model="exitRules"
+  item-key="id"
+  list-id="exit-rules"
+  group="strategy-rules"
+/>
+```
 
 ### Default Slot
 
@@ -301,7 +359,7 @@ pnpm install
 pnpm dev
 ```
 
-The playground lives in `playground/` and is not published to npm. It imports VueSortable with the public package name, `vuesortable`; the playground Vite config aliases that name to `src/index.ts` so local development works before `dist/` exists.
+The playground lives in `playground/` and is not published to npm. It imports VueSortable with the public package name, `@guillemservera/vue-sortable`; the playground Vite config aliases that name to `src/index.ts` so local development works before `dist/` exists.
 
 The Nuxt 4 SSR fixture lives in `examples/nuxt-basic/`. It consumes VueSortable through the workspace package entry and is validated with:
 
