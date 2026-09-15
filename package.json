@@ -40,7 +40,7 @@
     "@vitejs/plugin-vue": "^5.2.4",
     "@vue/server-renderer": "^3.5.13",
     "@vue/test-utils": "^2.4.6",
-    "jsdom": "^25.0.1",
+    "jsdom": "^30.0.1",
     "publint": "0.3.24",
     "typescript": "^5.8.3",
     "uqr": "^0.1.3",
