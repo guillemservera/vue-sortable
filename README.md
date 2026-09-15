@@ -336,21 +336,20 @@ VueSortable takes a different approach: it is a Vue-native primitive with local 
 
 ## Limitations
 
-- Single-list reorder only.
 - No nested lists yet.
-- No cross-list transfer yet.
 - No virtualized lists yet.
 - No multi-select reorder yet.
+- `flow` is not a SortableJS-style freeform/grid replacement.
 - The API is `0.x` and may change before `1.0`.
 
 ## Roadmap
 
 - Higher-level accessibility examples and guidance.
-- Cross-list transfer primitives.
 - Nested list guidance.
 - Virtualized list integration notes.
 - More collision strategies.
 - Optional examples for common UI patterns.
+
 
 ## Local Development
 
