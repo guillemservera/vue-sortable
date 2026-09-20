@@ -1,6 +1,6 @@
 {
   "name": "@guillemservera/vue-sortable",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Unstyled sortable primitives for Vue 3.",
   "type": "module",
   "packageManager": "pnpm@10.17.1",
