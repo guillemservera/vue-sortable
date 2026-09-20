@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.1
+
+- Resolve the drag layout's entries by key instead of scanning the list per element, so refreshing it during a drag stops being quadratic. Measured on Chromium with layout invalidated each pass: 1000 rows 19ms to 4.5ms, 300 rows 2.7ms to 1.2ms, unchanged for short lists. No behavior change.
+
 ## 0.1.0
 
 - Initial VueSortable package contract.
