@@ -39,6 +39,13 @@ function pointerEvent(type: string, options: MouseEventInit) {
   })
 }
 
+// Dispatch a real event instead of `trigger()`: @vue/test-utils assigns init keys
+// such as `button` after construction, which throws on jsdom's getter-only props.
+async function pointerDown(target: { element: Element }, options: MouseEventInit) {
+  target.element.dispatchEvent(pointerEvent('pointerdown', options))
+  await nextTick()
+}
+
 function rectFrom(input: { top: number, left: number, width: number, height: number }): DOMRect {
   return {
     bottom: input.top + input.height,
@@ -452,7 +459,7 @@ describe('Sortable', () => {
       three: { top: 192, height: 40 },
     })
 
-    await wrapper.get('[data-vuesortable-item-key="one"]').trigger('pointerdown', {
+    await pointerDown(wrapper.get('[data-vuesortable-item-key="one"]'), {
       button: 0,
       clientX: 60,
       clientY: 120,
@@ -510,7 +517,7 @@ describe('Sortable', () => {
       four: { top: 268, height: 40 },
     })
 
-    await source.get('[data-vuesortable-item-key="one"]').trigger('pointerdown', {
+    await pointerDown(source.get('[data-vuesortable-item-key="one"]'), {
       button: 0,
       clientX: 60,
       clientY: 120,
@@ -568,7 +575,7 @@ describe('Sortable', () => {
       four: { top: 488, height: 40 },
     })
 
-    await source.get('[data-vuesortable-item-key="one"]').trigger('pointerdown', {
+    await pointerDown(source.get('[data-vuesortable-item-key="one"]'), {
       button: 0,
       clientX: 60,
       clientY: 320,
@@ -621,7 +628,7 @@ describe('Sortable', () => {
       four: { top: 268, height: 40 },
     })
 
-    await source.get('[data-vuesortable-item-key="one"]').trigger('pointerdown', {
+    await pointerDown(source.get('[data-vuesortable-item-key="one"]'), {
       button: 0,
       clientX: 60,
       clientY: 120,
@@ -700,7 +707,7 @@ describe('Sortable', () => {
       four: { top: 268, height: 40 },
     })
 
-    await source.get('[data-vuesortable-item-key="one"]').trigger('pointerdown', {
+    await pointerDown(source.get('[data-vuesortable-item-key="one"]'), {
       button: 0,
       clientX: 60,
       clientY: 120,
@@ -773,7 +780,7 @@ describe('Sortable', () => {
       four: { top: 268, height: 40 },
     })
 
-    await source.get('[data-vuesortable-item-key="one"]').trigger('pointerdown', {
+    await pointerDown(source.get('[data-vuesortable-item-key="one"]'), {
       button: 0,
       clientX: 60,
       clientY: 120,
@@ -841,7 +848,7 @@ describe('Sortable', () => {
       four: { top: 268, left: 260, width: 120, height: 40 },
     })
 
-    await source.get('[data-vuesortable-item-key="one"]').trigger('pointerdown', {
+    await pointerDown(source.get('[data-vuesortable-item-key="one"]'), {
       button: 0,
       clientX: 60,
       clientY: 120,
@@ -879,7 +886,7 @@ describe('Sortable', () => {
       three: { top: 104, left: 132, width: 40, height: 40 },
     })
 
-    await wrapper.get('[data-vuesortable-item-key="one"]').trigger('pointerdown', {
+    await pointerDown(wrapper.get('[data-vuesortable-item-key="one"]'), {
       button: 0,
       clientX: 60,
       clientY: 120,
@@ -927,7 +934,7 @@ describe('Sortable', () => {
       size: { width: 40, height: 40 },
     })
 
-    await wrapper.get('[data-vuesortable-item-key="one"]').trigger('pointerdown', {
+    await pointerDown(wrapper.get('[data-vuesortable-item-key="one"]'), {
       button: 0,
       clientX: 50,
       clientY: 120,
@@ -976,7 +983,7 @@ describe('Sortable', () => {
       size: { width: 40, height: 40 },
     })
 
-    await wrapper.get('[data-vuesortable-item-key="one"]').trigger('pointerdown', {
+    await pointerDown(wrapper.get('[data-vuesortable-item-key="one"]'), {
       button: 0,
       clientX: 60,
       clientY: 124,
@@ -1043,7 +1050,7 @@ describe('Sortable', () => {
       size: { width: 40, height: 40 },
     })
 
-    await wrapper.get('[data-vuesortable-item-key="one"]').trigger('pointerdown', {
+    await pointerDown(wrapper.get('[data-vuesortable-item-key="one"]'), {
       button: 0,
       clientX: 60,
       clientY: 124,
@@ -1118,7 +1125,7 @@ describe('Sortable', () => {
     })
 
     // Grab d at its center (row 2 start: left 20 + 260/2, top 64 + 36/2).
-    await wrapper.get('[data-vuesortable-item-key="d"]').trigger('pointerdown', {
+    await pointerDown(wrapper.get('[data-vuesortable-item-key="d"]'), {
       button: 0,
       clientX: 150,
       clientY: 82,
@@ -1200,7 +1207,7 @@ describe('Sortable', () => {
 
     // Grab "one" near its TOP edge, horizontally centred: the overlay centre
     // sits 18px below the cursor.
-    await wrapper.get('[data-vuesortable-item-key="one"]').trigger('pointerdown', {
+    await pointerDown(wrapper.get('[data-vuesortable-item-key="one"]'), {
       button: 0,
       clientX: 60,
       clientY: 106,
@@ -1279,7 +1286,7 @@ describe('Sortable', () => {
       const wrapper = mountFlowRows()
 
       // Grab "two" at its centre (row 1, second slot).
-      await wrapper.get('[data-vuesortable-item-key="two"]').trigger('pointerdown', {
+      await pointerDown(wrapper.get('[data-vuesortable-item-key="two"]'), {
         button: 0,
         clientX: 104,
         clientY: 124,
@@ -1305,7 +1312,7 @@ describe('Sortable', () => {
     it('switches rows once the pointer passes the threshold and moves the overlay onto the new row', async () => {
       const wrapper = mountFlowRows()
 
-      await wrapper.get('[data-vuesortable-item-key="two"]').trigger('pointerdown', {
+      await pointerDown(wrapper.get('[data-vuesortable-item-key="two"]'), {
         button: 0,
         clientX: 104,
         clientY: 124,
@@ -1329,7 +1336,7 @@ describe('Sortable', () => {
     it('applies the same threshold when returning to the previous row', async () => {
       const wrapper = mountFlowRows()
 
-      await wrapper.get('[data-vuesortable-item-key="two"]').trigger('pointerdown', {
+      await pointerDown(wrapper.get('[data-vuesortable-item-key="two"]'), {
         button: 0,
         clientX: 104,
         clientY: 124,
@@ -1394,7 +1401,7 @@ describe('Sortable', () => {
     })
 
     // Grab d (260px, row 2 start) at its centre.
-    await wrapper.get('[data-vuesortable-item-key="d"]').trigger('pointerdown', {
+    await pointerDown(wrapper.get('[data-vuesortable-item-key="d"]'), {
       button: 0,
       clientX: 150,
       clientY: 82,
@@ -1458,7 +1465,7 @@ describe('Sortable', () => {
     })
 
     // Grab "b" (right chip) at its centre → overlay centre tracks the cursor.
-    await wrapper.get('[data-vuesortable-item-key="b"]').trigger('pointerdown', {
+    await pointerDown(wrapper.get('[data-vuesortable-item-key="b"]'), {
       button: 0,
       clientX: 104,
       clientY: 124,
@@ -1509,7 +1516,7 @@ describe('Sortable', () => {
       three: { top: 104, left: 132, width: 40, height: 40 },
     })
 
-    await wrapper.get('[data-vuesortable-item-key="one"]').trigger('pointerdown', {
+    await pointerDown(wrapper.get('[data-vuesortable-item-key="one"]'), {
       button: 0,
       clientX: 60,
       clientY: 120,
@@ -1543,7 +1550,7 @@ describe('Sortable', () => {
       three: { top: 104, left: 304, width: 132, height: 40 },
     })
 
-    await wrapper.get('[data-vuesortable-item-key="one"]').trigger('pointerdown', {
+    await pointerDown(wrapper.get('[data-vuesortable-item-key="one"]'), {
       button: 0,
       clientX: 52,
       clientY: 120,
@@ -1581,7 +1588,7 @@ describe('Sortable', () => {
       three: { top: 104, left: 340, width: 120, height: 40 },
     })
 
-    await wrapper.get('[data-vuesortable-item-key="one"]').trigger('pointerdown', {
+    await pointerDown(wrapper.get('[data-vuesortable-item-key="one"]'), {
       button: 0,
       clientX: 52,
       clientY: 120,
@@ -1619,7 +1626,7 @@ describe('Sortable', () => {
       three: { top: 104, left: 304, width: 132, height: 40 },
     })
 
-    await wrapper.get('[data-vuesortable-item-key="one"]').trigger('pointerdown', {
+    await pointerDown(wrapper.get('[data-vuesortable-item-key="one"]'), {
       button: 0,
       clientX: 52,
       clientY: 120,
@@ -1649,7 +1656,7 @@ describe('Sortable', () => {
       three: { top: 192, height: 40 },
     })
 
-    await wrapper.get('[data-vuesortable-item-key="one"]').trigger('pointerdown', {
+    await pointerDown(wrapper.get('[data-vuesortable-item-key="one"]'), {
       button: 0,
       clientX: 60,
       clientY: 120,
@@ -1674,7 +1681,7 @@ describe('Sortable', () => {
       three: { top: 192, height: 40 },
     })
 
-    await wrapper.get('[data-vuesortable-item-key="three"]').trigger('pointerdown', {
+    await pointerDown(wrapper.get('[data-vuesortable-item-key="three"]'), {
       button: 0,
       clientX: 60,
       clientY: 208,
@@ -1706,7 +1713,7 @@ describe('Sortable', () => {
       three: { top: 104, left: 132, width: 40, height: 40 },
     })
 
-    await wrapper.get('[data-vuesortable-item-key="three"]').trigger('pointerdown', {
+    await pointerDown(wrapper.get('[data-vuesortable-item-key="three"]'), {
       button: 0,
       clientX: 148,
       clientY: 120,
@@ -1738,7 +1745,7 @@ describe('Sortable', () => {
       three: { top: 104, left: 132, width: 40, height: 40 },
     })
 
-    await wrapper.get('[data-vuesortable-item-key="one"]').trigger('pointerdown', {
+    await pointerDown(wrapper.get('[data-vuesortable-item-key="one"]'), {
       button: 0,
       clientX: 60,
       clientY: 120,
@@ -1770,7 +1777,7 @@ describe('Sortable', () => {
       three: { top: 104, left: 132, width: 40, height: 40 },
     })
 
-    await wrapper.get('[data-vuesortable-item-key="three"]').trigger('pointerdown', {
+    await pointerDown(wrapper.get('[data-vuesortable-item-key="three"]'), {
       button: 0,
       clientX: 148,
       clientY: 120,
@@ -1793,7 +1800,7 @@ describe('Sortable', () => {
       two: { top: 148, height: 40 },
     })
 
-    await wrapper.get('[data-vuesortable-item-key="one"]').trigger('pointerdown', {
+    await pointerDown(wrapper.get('[data-vuesortable-item-key="one"]'), {
       button: 0,
       clientX: 60,
       clientY: 120,
@@ -1821,7 +1828,7 @@ describe('Sortable', () => {
       two: { top: 148, height: 40 },
     })
 
-    await wrapper.get('[data-test-handle]').trigger('pointerdown', {
+    await pointerDown(wrapper.get('[data-test-handle]'), {
       button: 0,
       clientX: 60,
       clientY: 120,
@@ -1838,7 +1845,7 @@ describe('Sortable', () => {
       { id: 'two', label: 'Two' },
     ])
 
-    await wrapper.get('[data-vuesortable-item-key="one"]').trigger('pointerdown', {
+    await pointerDown(wrapper.get('[data-vuesortable-item-key="one"]'), {
       button: 0,
       clientX: 20,
       clientY: 20,
@@ -1870,7 +1877,7 @@ describe('Sortable', () => {
       two: { top: 148, height: 40 },
     })
 
-    await wrapper.get('[data-vuesortable-item-key="one"]').trigger('pointerdown', {
+    await pointerDown(wrapper.get('[data-vuesortable-item-key="one"]'), {
       button: 0,
       clientX: 60,
       clientY: 120,
@@ -1909,7 +1916,7 @@ describe('Sortable', () => {
       three: { top: 192, height: 40 },
     })
 
-    await wrapper.get('[data-vuesortable-item-key="one"]').trigger('pointerdown', {
+    await pointerDown(wrapper.get('[data-vuesortable-item-key="one"]'), {
       button: 0,
       clientX: 60,
       clientY: 120,
@@ -1945,7 +1952,7 @@ describe('Sortable', () => {
       three: { top: 192, height: 40 },
     })
 
-    await wrapper.get('[data-vuesortable-item-key="one"]').trigger('pointerdown', {
+    await pointerDown(wrapper.get('[data-vuesortable-item-key="one"]'), {
       button: 0,
       clientX: 60,
       clientY: 120,
@@ -1964,7 +1971,7 @@ describe('Sortable', () => {
       one: { top: 192, height: 40 },
     })
 
-    await wrapper.get('[data-vuesortable-item-key="one"]').trigger('pointerdown', {
+    await pointerDown(wrapper.get('[data-vuesortable-item-key="one"]'), {
       button: 0,
       clientX: 60,
       clientY: 208,
@@ -2007,7 +2014,7 @@ describe('Sortable', () => {
       },
     )
 
-    await wrapper.get('[data-vuesortable-item-key="one"]').trigger('pointerdown', {
+    await pointerDown(wrapper.get('[data-vuesortable-item-key="one"]'), {
       button: 0,
       clientX: 60,
       clientY: 120,
@@ -2049,7 +2056,7 @@ describe('Sortable', () => {
       ],
     })
 
-    await wrapper.get('[data-vuesortable-item-key="one"]').trigger('pointerdown', {
+    await pointerDown(wrapper.get('[data-vuesortable-item-key="one"]'), {
       button: 0,
       clientX: 60,
       clientY: 120,
@@ -2098,7 +2105,7 @@ describe('Sortable', () => {
       ],
     })
 
-    await wrapper.get('[data-vuesortable-item-key="one"]').trigger('pointerdown', {
+    await pointerDown(wrapper.get('[data-vuesortable-item-key="one"]'), {
       button: 0,
       clientX: 60,
       clientY: 120,
@@ -2144,7 +2151,7 @@ describe('Sortable', () => {
       three: { top: 192, height: 40 },
     })
 
-    await wrapper.get('[data-vuesortable-item-key="one"]').trigger('pointerdown', {
+    await pointerDown(wrapper.get('[data-vuesortable-item-key="one"]'), {
       button: 0,
       clientX: 60,
       clientY: 120,
@@ -2191,7 +2198,7 @@ describe('Sortable', () => {
       two: { top: 148, height: 40 },
     })
 
-    await wrapper.get('[data-vuesortable-item-key="one"]').trigger('pointerdown', {
+    await pointerDown(wrapper.get('[data-vuesortable-item-key="one"]'), {
       button: 0,
       clientX: 60,
       clientY: 120,
@@ -2227,7 +2234,7 @@ describe('Sortable', () => {
       two: { top: 104, left: 104, width: 40, height: 40 },
     })
 
-    await wrapper.get('[data-vuesortable-item-key="one"]').trigger('pointerdown', {
+    await pointerDown(wrapper.get('[data-vuesortable-item-key="one"]'), {
       button: 0,
       clientX: 60,
       clientY: 120,
