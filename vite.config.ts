@@ -16,7 +16,7 @@ export default defineConfig(({ command }) => ({
       entryRoot: 'src',
       include: ['src'],
       exclude: ['tests', 'playground'],
-      rollupTypes: true,
+      bundleTypes: true,
       tsconfigPath: resolve(__dirname, 'tsconfig.build.json'),
     }),
   ],
