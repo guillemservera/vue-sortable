@@ -435,6 +435,7 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
       requestListMotion()
       updateGroupPreview(state, nextState, target.entry, previewIndex)
       dragState.value = nextState
+      if (layout.value === 'flow') void nextTick(pinFlowOverlayAfterRender)
       emit.dragStart(payloadFromState(nextState))
       emit.dragMove(movePayloadFromState(nextState, event))
       event.preventDefault()
@@ -461,6 +462,7 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
       )
       updateGroupPreview(state, nextState, target.entry, previewIndex)
       dragState.value = nextState
+      if (layout.value === 'flow') void nextTick(pinFlowOverlayAfterRender)
       emit.dragMove(movePayloadFromState(nextState, event))
     }
     else if (
@@ -744,7 +746,6 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
   function resolveDragTarget(event: PointerEvent, state: DragState<T>, direction: -1 | 0 | 1) {
     const rawSourcePosition = resolveOverlayPositionRaw(event, state)
     const targetEntry = getGroupedTargetEntry(event, state) ?? groupEntry
-    const sourcePosition = resolveOverlayPosition(event, state, targetEntry.id === listId ? null : targetEntry)
     const targetLayout = targetEntry.id === listId
       ? state.layout
       : targetEntry.measureLayout() ?? state.layout
@@ -770,6 +771,9 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
           width: state.width,
         }
       : undefined
+    const pinnedPlaceholder = placeholderPosition ? toSourceRootPosition(placeholderPosition, targetEntry) : null
+    const freePosition = resolveOverlayPosition(event, state, targetEntry.id === listId ? null : targetEntry)
+    const sourcePosition = pinnedPlaceholder ? pinFlowOverlay(freePosition, pinnedPlaceholder) : freePosition
     // Root-relative cursor position: flow layouts aim line selection with the
     // actual pointer instead of the overlay centre (off-centre grabs diverge).
     const targetRoot = targetEntry.layout() === 'flow' ? targetEntry.root() : null
@@ -793,6 +797,50 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
       previewIndex,
       sourcePosition,
     }
+  }
+
+  // Flow overlays ride the placeholder's row: the cross axis is pinned to the
+  // placeholder and only the main axis follows the pointer.
+  function pinFlowOverlay(position: OverlayPosition, placeholder: OverlayPosition): OverlayPosition {
+    return orientation.value === 'horizontal'
+      ? { left: position.left, y: placeholder.y }
+      : { left: placeholder.left, y: position.y }
+  }
+
+  function toSourceRootPosition(position: OverlayPosition, entry: SortableGroupEntry<T>): OverlayPosition | null {
+    if (entry.id === listId) return position
+
+    const root = getRootElement()
+    const targetRoot = entry.root()
+    if (!root || !targetRoot) return null
+
+    const source = getRootGeometry(root)
+    const target = getRootGeometry(targetRoot)
+    return {
+      left: position.left + target.left - source.left,
+      y: position.y + target.top - source.top,
+    }
+  }
+
+  // After a retarget the placeholder may render on another row; move the
+  // overlay there without waiting for the next pointer move.
+  function pinFlowOverlayAfterRender() {
+    const state = dragState.value
+    if (!state?.started) return
+
+    const entry = state.previewList === listId
+      ? groupEntry
+      : state.group ? getRegisteredGroupEntry(state.group, state.previewList) as SortableGroupEntry<T> | null : null
+    const placeholder = entry?.readPlaceholderPosition(state.key)
+    const pinnedPlaceholder = entry && placeholder ? toSourceRootPosition(placeholder, entry) : null
+    if (!pinnedPlaceholder) return
+
+    const position = pinFlowOverlay(state, pinnedPlaceholder)
+    if (position.left === state.left && position.y === state.y) return
+
+    state.left = position.left
+    state.y = position.y
+    applyOverlayTransform(position.left, position.y)
   }
 
   function getGroupedTargetEntry(event: PointerEvent, state: DragState<T>): SortableGroupEntry<T> | null {
