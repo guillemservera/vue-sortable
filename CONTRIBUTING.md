@@ -4,7 +4,7 @@ Thanks for helping improve VueSortable.
 
 ## Development
 
-Use Node.js 22 or 24 and pnpm 10.17.1:
+Use Node.js 22.22.2+ or 24.15+ and pnpm 10.17.1 (the test DOM, jsdom 30, requires them):
 
 ```bash
 corepack enable
