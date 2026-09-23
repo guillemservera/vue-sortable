@@ -1,0 +1,115 @@
+name: Release
+
+# Stages an npm release when a GitHub release is published (tag vX.Y.Z matching package.json).
+# Auth: npm Trusted Publishing (OIDC) — no NPM_TOKEN. The trusted publisher only allows
+# `npm stage publish`: the version goes live after a maintainer approves it with 2FA
+# (npmjs.com → package → Staged, or `npm stage approve <id>`), so CI alone can never ship.
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+concurrency:
+  # Per tag: a shared group would cancel a still-pending run when another release is published.
+  group: vue-sortable-release-${{ github.event.release.tag_name }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build release package
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      artifact-id: ${{ steps.upload.outputs.artifact-id }}
+      sha256: ${{ steps.pack.outputs.sha256 }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Validate release commit and version
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          if ! git merge-base --is-ancestor HEAD refs/remotes/origin/main; then
+            echo "::error::Release commit must belong to origin/main"
+            exit 1
+          fi
+          version="$(jq -er '.version | select(type == "string")' package.json)"
+          if [ "$RELEASE_TAG" != "v${version}" ]; then
+            echo "::error::Release tag does not match package.json version"
+            exit 1
+          fi
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+        with:
+          version: 10.17.1
+          run_install: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run ci
+      - name: Pack and validate release tarball
+        id: pack
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          mkdir "$RUNNER_TEMP/npm-package"
+          npm pack --ignore-scripts --pack-destination "$RUNNER_TEMP/npm-package"
+          mv "$RUNNER_TEMP/npm-package/"*.tgz "$RUNNER_TEMP/package.tgz"
+          tar -xOf "$RUNNER_TEMP/package.tgz" package/package.json |
+            jq -e --arg tag "$RELEASE_TAG" \
+              '.name == "@guillemservera/vue-sortable" and ("v" + .version) == $tag'
+          echo "sha256=$(sha256sum "$RUNNER_TEMP/package.tgz" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+      - name: Upload validated tarball
+        id: upload
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: npm-package
+          path: ${{ runner.temp }}/package.tgz
+          if-no-files-found: error
+          retention-days: 7
+
+  stage:
+    name: Stage on npm
+    needs: build
+    environment: npm
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      # No checkout or package scripts in the job that can request an OIDC token.
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          artifact-ids: ${{ needs.build.outputs.artifact-id }}
+          path: ${{ runner.temp }}/npm-package
+          merge-multiple: true
+      - name: Verify tarball integrity
+        working-directory: ${{ runner.temp }}/npm-package
+        env:
+          EXPECTED_SHA256: ${{ needs.build.outputs.sha256 }}
+        run: |
+          printf '%s  package.tgz\n' "$EXPECTED_SHA256" | sha256sum --check --strict
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+      # `npm stage` ships with npm 12 (Node 24 bundles npm 11).
+      - run: npm install -g npm@12 --ignore-scripts
+      - name: Stage validated tarball
+        working-directory: ${{ runner.temp }}/npm-package
+        env:
+          DIST_TAG: ${{ (github.event.release.prerelease || contains(github.event.release.tag_name, '-')) && 'next' || 'latest' }}
+        run: npm stage publish ./package.tgz --ignore-scripts --provenance --access public --tag "$DIST_TAG"
