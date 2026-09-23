@@ -438,7 +438,7 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
       dragState.value = nextState
       if (layout.value === 'flow') {
         void nextTick(pinFlowOverlayAfterRender)
-        observeFlowResize()
+        observeFlowResize(target.entry)
       }
       emit.dragStart(payloadFromState(nextState))
       emit.dragMove(movePayloadFromState(nextState, event))
@@ -466,7 +466,10 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
       )
       updateGroupPreview(state, nextState, target.entry, previewIndex)
       dragState.value = nextState
-      if (layout.value === 'flow') void nextTick(pinFlowOverlayAfterRender)
+      if (layout.value === 'flow') {
+        void nextTick(pinFlowOverlayAfterRender)
+        if (target.entry.id !== state.previewList) observeFlowResize(target.entry)
+      }
       emit.dragMove(movePayloadFromState(nextState, event))
     }
     else if (
@@ -848,15 +851,17 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
   }
 
   // A container resize can rewrap the placeholder onto another row without
-  // any pointer move or index change; keep the overlay on its row.
-  // ponytail: watches this root only, not a grouped target root.
-  function observeFlowResize() {
+  // any pointer move or index change; keep the overlay on its row. Watches
+  // this root plus the grouped list currently holding the placeholder.
+  function observeFlowResize(previewEntry: SortableGroupEntry<T>) {
     const root = getRootElement()
     if (!root || typeof ResizeObserver === 'undefined') return
 
     flowResizeObserver?.disconnect()
     flowResizeObserver = new ResizeObserver(pinFlowOverlayAfterRender)
     flowResizeObserver.observe(root)
+    const previewRoot = previewEntry.root()
+    if (previewRoot && previewRoot !== root) flowResizeObserver.observe(previewRoot)
   }
 
   function getGroupedTargetEntry(event: PointerEvent, state: DragState<T>): SortableGroupEntry<T> | null {
