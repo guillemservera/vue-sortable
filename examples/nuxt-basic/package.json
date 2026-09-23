@@ -12,6 +12,6 @@
     "@guillemservera/vue-sortable": "workspace:*",
     "nuxt": "^4.5.2",
     "vue": "^3.5.42",
-    "vue-router": "^4.0.0"
+    "vue-router": "^5.3.1"
   }
 }
