@@ -2,7 +2,7 @@
 
 ## 0.2.0
 
-- `layout="flow"`: the lifted overlay now stays on the row that holds the placeholder and only follows the pointer along the row, instead of floating freely on both axes. Changing rows now requires the cursor to be more than half a row height past the current row's band (hysteresis), so small vertical drift while dragging along a row no longer retargets another row. When the row changes, the overlay moves onto the new row with the placeholder. Axis layouts are unchanged.
+- `layout="flow"`: the lifted overlay now stays on the row that holds the placeholder and only follows the pointer along the row, instead of floating freely on both axes. Changing rows now requires the cursor to be more than half a row height past the current row's band (hysteresis), so small vertical drift while dragging along a row no longer retargets another row. When the row changes, or a container resize rewraps the placeholder onto another row, the overlay moves onto that row with the placeholder. Axis layouts are unchanged.
 
 ## 0.1.1
 

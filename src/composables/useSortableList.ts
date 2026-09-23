@@ -168,6 +168,7 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
   let shouldRunListMotion = false
   let shouldRefreshLayout = false
   let restoreDocumentCursor: (() => void) | null = null
+  let flowResizeObserver: ResizeObserver | null = null
 
   const listMotionRects = new Map<string, MotionRect>()
   const listMotionElements = new Set<HTMLElement>()
@@ -435,7 +436,10 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
       requestListMotion()
       updateGroupPreview(state, nextState, target.entry, previewIndex)
       dragState.value = nextState
-      if (layout.value === 'flow') void nextTick(pinFlowOverlayAfterRender)
+      if (layout.value === 'flow') {
+        void nextTick(pinFlowOverlayAfterRender)
+        observeFlowResize()
+      }
       emit.dragStart(payloadFromState(nextState))
       emit.dragMove(movePayloadFromState(nextState, event))
       event.preventDefault()
@@ -841,6 +845,18 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
     state.left = position.left
     state.y = position.y
     applyOverlayTransform(position.left, position.y)
+  }
+
+  // A container resize can rewrap the placeholder onto another row without
+  // any pointer move or index change; keep the overlay on its row.
+  // ponytail: watches this root only, not a grouped target root.
+  function observeFlowResize() {
+    const root = getRootElement()
+    if (!root || typeof ResizeObserver === 'undefined') return
+
+    flowResizeObserver?.disconnect()
+    flowResizeObserver = new ResizeObserver(pinFlowOverlayAfterRender)
+    flowResizeObserver.observe(root)
   }
 
   function getGroupedTargetEntry(event: PointerEvent, state: DragState<T>): SortableGroupEntry<T> | null {
@@ -1363,6 +1379,8 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
   }
 
   function clearPointerListeners() {
+    flowResizeObserver?.disconnect()
+    flowResizeObserver = null
     if (!canUseDOM()) return
 
     document.removeEventListener('pointermove', handlePointerMove)
