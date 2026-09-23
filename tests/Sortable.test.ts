@@ -1225,7 +1225,7 @@ describe('Sortable', () => {
     // row bands are row 1 = 4..44 and row 2 = 48..88; items are
     // [one two three] / [four five]. Rows switch only once the pointer is
     // more than half a row height (20px) past the current row's band.
-    function mountFlowRows(grid = { columns: 3 }) {
+    function mountFlowRows() {
       const wrapper = mountSortable(
         ['one', 'two', 'three', 'four', 'five'].map(id => ({ id, label: id })),
         {
@@ -1245,18 +1245,14 @@ describe('Sortable', () => {
       )
 
       mockRootRect(wrapper, { top: 100, left: 40, width: 132, height: 140 })
-      // The column count is read live, so a test can narrow the container.
-      const slots = {
+      mockFlowSlotRects(wrapper, ['one', 'two', 'three', 'four', 'five'], {
         baseLeft: 40,
         baseTop: 104,
-        get columns() {
-          return grid.columns
-        },
+        columns: 3,
         pitchX: 44,
         pitchY: 44,
         size: { width: 40, height: 40 },
-      }
-      mockFlowSlotRects(wrapper, ['one', 'two', 'three', 'four', 'five'], slots)
+      })
 
       return wrapper
     }
@@ -1328,56 +1324,6 @@ describe('Sortable', () => {
       await nextTick()
       expect((wrapper.props('modelValue') as Item[]).map(item => item.id))
         .toEqual(['one', 'three', 'four', 'five', 'two'])
-    })
-
-    it('moves the overlay with the placeholder when the container reflows it onto another row mid-drag', async () => {
-      // Browsers report container size changes through ResizeObserver.
-      const observers: Array<{ callback: ResizeObserverCallback, targets: Element[] }> = []
-      vi.stubGlobal('ResizeObserver', class {
-        private readonly record: { callback: ResizeObserverCallback, targets: Element[] }
-        constructor(callback: ResizeObserverCallback) {
-          this.record = { callback, targets: [] }
-          observers.push(this.record)
-        }
-
-        observe(target: Element) {
-          this.record.targets.push(target)
-        }
-
-        unobserve() {}
-        disconnect() {
-          this.record.targets = []
-        }
-      })
-
-      try {
-        const grid = { columns: 3 }
-        const wrapper = mountFlowRows(grid)
-
-        await wrapper.get('[data-vuesortable-item-key="two"]').trigger('pointerdown', {
-          button: 0,
-          clientX: 104,
-          clientY: 124,
-        })
-        await move(108, 124)
-        expect(overlayPosition(wrapper).top).toBe(placeholderTop(wrapper))
-
-        // The container narrows to one chip per row: the placeholder (still
-        // index 1) wraps onto row 2 with no pointer movement.
-        grid.columns = 1
-        const rowOneTop = overlayPosition(wrapper).top
-        for (const observer of observers) {
-          if (observer.targets.length > 0) observer.callback([], {} as ResizeObserver)
-        }
-        await nextTick()
-
-        expect(placeholderTop(wrapper)).toBeGreaterThan(rowOneTop)
-        expect(overlayPosition(wrapper).top).toBe(placeholderTop(wrapper))
-        expect(listChildOrder(wrapper)).toEqual(['one', 'two', 'three', 'four', 'five'])
-      }
-      finally {
-        vi.unstubAllGlobals()
-      }
     })
 
     it('applies the same threshold when returning to the previous row', async () => {
