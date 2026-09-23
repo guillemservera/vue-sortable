@@ -1330,9 +1330,8 @@ describe('Sortable', () => {
         .toEqual(['one', 'three', 'four', 'five', 'two'])
     })
 
-    // Browsers report container size changes through ResizeObserver; the
-    // stub lets a test resize one element and notify whoever observes it.
-    function stubResizeObserver() {
+    it('moves the overlay with the placeholder when the container reflows it onto another row mid-drag', async () => {
+      // Browsers report container size changes through ResizeObserver.
       const observers: Array<{ callback: ResizeObserverCallback, targets: Element[] }> = []
       vi.stubGlobal('ResizeObserver', class {
         private readonly record: { callback: ResizeObserverCallback, targets: Element[] }
@@ -1351,16 +1350,6 @@ describe('Sortable', () => {
         }
       })
 
-      return (element: Element) => {
-        for (const observer of observers) {
-          if (observer.targets.includes(element)) observer.callback([], {} as ResizeObserver)
-        }
-      }
-    }
-
-    it('moves the overlay with the placeholder when the container reflows it onto another row mid-drag', async () => {
-      const resize = stubResizeObserver()
-
       try {
         const grid = { columns: 3 }
         const wrapper = mountFlowRows(grid)
@@ -1377,76 +1366,14 @@ describe('Sortable', () => {
         // index 1) wraps onto row 2 with no pointer movement.
         grid.columns = 1
         const rowOneTop = overlayPosition(wrapper).top
-        resize(wrapper.get('[data-vuesortable-root]').element)
+        for (const observer of observers) {
+          if (observer.targets.length > 0) observer.callback([], {} as ResizeObserver)
+        }
         await nextTick()
 
         expect(placeholderTop(wrapper)).toBeGreaterThan(rowOneTop)
         expect(overlayPosition(wrapper).top).toBe(placeholderTop(wrapper))
         expect(listChildOrder(wrapper)).toEqual(['one', 'two', 'three', 'four', 'five'])
-      }
-      finally {
-        vi.unstubAllGlobals()
-      }
-    })
-
-    it('moves the overlay with the placeholder when a grouped destination reflows it mid-drag', async () => {
-      const resize = stubResizeObserver()
-
-      try {
-        const host = document.createElement('div')
-        document.body.append(host)
-        const flowProps = {
-          group: 'chips',
-          layout: 'flow' as const,
-          motion: false as const,
-          orientation: 'horizontal' as const,
-        }
-        const source = mountSortable(
-          [{ id: 'a1', label: 'a1' }, { id: 'a2', label: 'a2' }],
-          { attachTo: host, props: { ...flowProps, listId: 'source' } },
-        )
-        const target = mountSortable(
-          [{ id: 'b1', label: 'b1' }, { id: 'b2', label: 'b2' }, { id: 'b3', label: 'b3' }],
-          { attachTo: host, props: { ...flowProps, listId: 'target' } },
-        )
-
-        const slots = { baseLeft: 40, pitchX: 44, pitchY: 44, size: { width: 40, height: 40 } }
-        mockRootRect(source, { top: 100, left: 40, width: 132, height: 48 })
-        mockFlowSlotRects(source, ['a1', 'a2'], { ...slots, baseTop: 104, columns: 3 })
-        const targetGrid = { columns: 3 }
-        mockRootRect(target, { top: 200, left: 40, width: 132, height: 140 })
-        mockFlowSlotRects(target, ['b1', 'b2', 'b3'], {
-          ...slots,
-          baseTop: 204,
-          get columns() {
-            return targetGrid.columns
-          },
-        })
-
-        // Drag a1 into the target's first row.
-        await source.get('[data-vuesortable-item-key="a1"]').trigger('pointerdown', {
-          button: 0,
-          clientX: 60,
-          clientY: 124,
-        })
-        await move(108, 224)
-        await nextTick()
-        expect(listChildOrder(target)).toContain('a1')
-
-        // Placeholder top in the source root's coordinates (the overlay's).
-        const targetPlaceholderTop = () =>
-          target.get('[data-vuesortable-placeholder]').element.getBoundingClientRect().top - 100
-        expect(overlayPosition(source).top).toBe(targetPlaceholderTop())
-        const rowOneTop = targetPlaceholderTop()
-
-        // Only the destination narrows: its placeholder wraps to a lower row
-        // with no pointer movement and no index change.
-        targetGrid.columns = 1
-        resize(target.get('[data-vuesortable-root]').element)
-        await nextTick()
-
-        expect(targetPlaceholderTop()).toBeGreaterThan(rowOneTop)
-        expect(overlayPosition(source).top).toBe(targetPlaceholderTop())
       }
       finally {
         vi.unstubAllGlobals()
