@@ -8,3 +8,5 @@ coverage
 *.tgz
 *.local
 .DS_Store
+# Local Pi runtime state
+.atl/
