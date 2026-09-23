@@ -1,4 +1,5 @@
 import type { SortableCollision, SortableItemEntry, SortableLayout, SortableOrientation } from '../types'
+import { FLOW_ROW_THRESHOLD } from '../constants'
 import { getLayoutRect } from './dom'
 
 export type RootGeometry = {
@@ -173,7 +174,18 @@ function findFlowPreviewIndex<T>(
   // INSIDE a line band. Falling back to the nearest line while hovering the
   // gaps between rows (or non-sortable siblings sharing the wrap) makes the
   // index oscillate with sub-pixel pointer moves as the wrap reflows.
-  const targetLine = findTargetFlowLine(lines, pointerCross, Boolean(placeholder))
+  // Row hysteresis: the placeholder's row keeps the target until the pointer
+  // leaves its band by FLOW_ROW_THRESHOLD of the row height, so changing rows
+  // is deliberate and vertical drift inside a row never retargets.
+  const placeholderLine = lines.find(line => line.placeholder)
+  const holdMargin = placeholderLine
+    ? (placeholderLine.crossEnd - placeholderLine.crossStart) * FLOW_ROW_THRESHOLD
+    : 0
+  const targetLine = placeholderLine
+    && pointerCross >= placeholderLine.crossStart - holdMargin
+    && pointerCross <= placeholderLine.crossEnd + holdMargin
+    ? placeholderLine
+    : findTargetFlowLine(lines, pointerCross, Boolean(placeholder))
   if (!targetLine) return placeholder?.index ?? 0
 
   // The placeholder is a stable dead zone: while the overlay stays over the

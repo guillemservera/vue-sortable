@@ -916,12 +916,15 @@ describe('Sortable', () => {
       },
     )
 
+    // 2 slots per row: rows are [one two] / [three four].
     mockRootRect(wrapper, { top: 100, left: 40, width: 88, height: 92 })
-    mockItemRects(wrapper, {
-      one: { top: 104, left: 40, width: 40, height: 40 },
-      two: { top: 104, left: 84, width: 40, height: 40 },
-      three: { top: 148, left: 40, width: 40, height: 40 },
-      four: { top: 148, left: 84, width: 40, height: 40 },
+    mockFlowSlotRects(wrapper, ['one', 'two', 'three', 'four'], {
+      baseLeft: 40,
+      baseTop: 104,
+      columns: 2,
+      pitchX: 44,
+      pitchY: 44,
+      size: { width: 40, height: 40 },
     })
 
     await wrapper.get('[data-vuesortable-item-key="one"]').trigger('pointerdown', {
@@ -934,7 +937,9 @@ describe('Sortable', () => {
 
     expect(wrapper.get('[data-vuesortable-root]').attributes('data-vuesortable-layout')).toBe('flow')
     expect(listChildOrder(wrapper)).toEqual(['two', 'one', 'three', 'four'])
-    expect(wrapper.get('[data-vuesortable-overlay]').attributes('style')).toContain('translate3d(0px, 48px, 0)')
+    // Index 1 wraps as the end of row 1, so the overlay rides row 1 with the
+    // placeholder instead of floating on the pointer's row.
+    expect(wrapper.get('[data-vuesortable-overlay]').attributes('style')).toContain('translate3d(0px, 4px, 0)')
   })
 
   it('resolves flow preview indexes against the live layout after the placeholder reflows rows', async () => {
@@ -1213,6 +1218,139 @@ describe('Sortable', () => {
     document.dispatchEvent(pointerEvent('pointermove', { clientX: 110, clientY: 130 }))
     await nextTick()
     expect(listChildOrder(wrapper)).toEqual(['two', 'one', 'three', 'four', 'five'])
+  })
+
+  describe('flow row hysteresis', () => {
+    // Shared geometry: 3 slots per row, 40px chips, 4px gaps. Root-relative
+    // row bands are row 1 = 4..44 and row 2 = 48..88; items are
+    // [one two three] / [four five]. Rows switch only once the pointer is
+    // more than half a row height (20px) past the current row's band.
+    function mountFlowRows() {
+      const wrapper = mountSortable(
+        ['one', 'two', 'three', 'four', 'five'].map(id => ({ id, label: id })),
+        {
+          props: {
+            layout: 'flow',
+            // No FLIP: placeholder rects read by the assertions are resting.
+            motion: false,
+            orientation: 'horizontal',
+          },
+          slot: {
+            listStyle: {
+              display: 'flex',
+              flexWrap: 'wrap',
+            },
+          },
+        },
+      )
+
+      mockRootRect(wrapper, { top: 100, left: 40, width: 132, height: 140 })
+      mockFlowSlotRects(wrapper, ['one', 'two', 'three', 'four', 'five'], {
+        baseLeft: 40,
+        baseTop: 104,
+        columns: 3,
+        pitchX: 44,
+        pitchY: 44,
+        size: { width: 40, height: 40 },
+      })
+
+      return wrapper
+    }
+
+    function overlayPosition(wrapper: MountedSortable) {
+      const overlay = wrapper.get('[data-vuesortable-overlay]').element as HTMLElement
+      const match = overlay.style.transform.match(/translate3d\(([-\d.]+)px, ([-\d.]+)px/)
+      if (!match) throw new Error(`Unexpected overlay transform: ${overlay.style.transform}`)
+      return { left: Number(match[1]), top: Number(match[2]) }
+    }
+
+    function placeholderTop(wrapper: MountedSortable) {
+      const placeholder = wrapper.get('[data-vuesortable-placeholder]').element as HTMLElement
+      const root = wrapper.get('[data-vuesortable-root]').element as HTMLElement
+      return placeholder.getBoundingClientRect().top - root.getBoundingClientRect().top
+    }
+
+    async function move(clientX: number, clientY: number) {
+      document.dispatchEvent(pointerEvent('pointermove', { clientX, clientY }))
+      await nextTick()
+    }
+
+    it('pins the overlay to the placeholder row while the pointer drifts vertically inside the threshold', async () => {
+      const wrapper = mountFlowRows()
+
+      // Grab "two" at its centre (row 1, second slot).
+      await wrapper.get('[data-vuesortable-item-key="two"]').trigger('pointerdown', {
+        button: 0,
+        clientX: 104,
+        clientY: 124,
+      })
+
+      await move(108, 124)
+      const rowTop = placeholderTop(wrapper)
+      expect(overlayPosition(wrapper).top).toBe(rowTop)
+
+      // Drift down inside row 1, then 12px into row 2's band (16px past the
+      // row 1 edge, still under half a row): the overlay follows the pointer
+      // horizontally only, and the placeholder never leaves row 1.
+      await move(110, 134)
+      expect(overlayPosition(wrapper)).toEqual({ left: 50, top: rowTop })
+      expect(listChildOrder(wrapper)).toEqual(['one', 'two', 'three', 'four', 'five'])
+
+      await move(112, 160)
+      expect(overlayPosition(wrapper)).toEqual({ left: 52, top: rowTop })
+      expect(listChildOrder(wrapper)).toEqual(['one', 'two', 'three', 'four', 'five'])
+      expect(wrapper.emitted('drag-move')?.at(-1)?.[0]).toMatchObject({ to: 1 })
+    })
+
+    it('switches rows once the pointer passes the threshold and moves the overlay onto the new row', async () => {
+      const wrapper = mountFlowRows()
+
+      await wrapper.get('[data-vuesortable-item-key="two"]').trigger('pointerdown', {
+        button: 0,
+        clientX: 104,
+        clientY: 124,
+      })
+      await move(108, 124)
+
+      // 26px past the row 1 edge: past half a row, so row 2 is targeted.
+      await move(108, 170)
+      expect(listChildOrder(wrapper)).toEqual(['one', 'three', 'four', 'five', 'two'])
+      expect(placeholderTop(wrapper)).toBeGreaterThanOrEqual(48)
+      // The overlay lands on the placeholder's new row without waiting for
+      // another pointer move.
+      expect(overlayPosition(wrapper).top).toBe(placeholderTop(wrapper))
+
+      document.dispatchEvent(pointerEvent('pointerup', { clientX: 108, clientY: 170 }))
+      await nextTick()
+      expect((wrapper.props('modelValue') as Item[]).map(item => item.id))
+        .toEqual(['one', 'three', 'four', 'five', 'two'])
+    })
+
+    it('applies the same threshold when returning to the previous row', async () => {
+      const wrapper = mountFlowRows()
+
+      await wrapper.get('[data-vuesortable-item-key="two"]').trigger('pointerdown', {
+        button: 0,
+        clientX: 104,
+        clientY: 124,
+      })
+      await move(108, 124)
+      await move(108, 170)
+      expect(listChildOrder(wrapper)).toEqual(['one', 'three', 'four', 'five', 'two'])
+      const rowTop = placeholderTop(wrapper)
+
+      // Back up into row 1's band, but only 8px past row 2's top edge.
+      await move(108, 140)
+      expect(listChildOrder(wrapper)).toEqual(['one', 'three', 'four', 'five', 'two'])
+      expect(overlayPosition(wrapper).top).toBe(rowTop)
+
+      // Well inside row 1 (more than half a row past row 2's edge); the
+      // overlay centre sits past "three", so the slot is after it.
+      await move(108, 120)
+      expect(listChildOrder(wrapper)).toEqual(['one', 'three', 'two', 'four', 'five'])
+      expect(placeholderTop(wrapper)).toBeLessThan(44)
+      expect(overlayPosition(wrapper).top).toBe(placeholderTop(wrapper))
+    })
   })
 
   it('stays fixpoint-stable across a variable-width sweep with repeated identical moves', async () => {

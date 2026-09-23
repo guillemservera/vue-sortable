@@ -3,6 +3,9 @@ import type { SortableMotion } from './types'
 export const DEFAULT_IGNORE_SELECTOR = 'button,input,textarea,select,a,[contenteditable="true"],[data-sortable-ignore]'
 export const DEFAULT_ACTIVATION_THRESHOLD = 4
 export const DEFAULT_OVERLAP = 0.5
+// Flow layouts keep the target row until the pointer is this fraction of the
+// row's height past its band, so vertical drift never flips rows by accident.
+export const FLOW_ROW_THRESHOLD = 0.5
 
 export const DEFAULT_MOTION = {
   list: {
