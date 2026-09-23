@@ -36,8 +36,8 @@ importers:
         specifier: ^6.4.3
         version: 6.4.3(@types/node@22.20.2)(jiti@2.7.0)(lightningcss@1.33.0)(terser@5.51.2)(yaml@2.8.4)
       vite-plugin-dts:
-        specifier: ^4.5.4
-        version: 4.5.4(@types/node@22.20.2)(rollup@4.63.3)(typescript@5.9.3)(vite@6.4.3(@types/node@22.20.2)(jiti@2.7.0)(lightningcss@1.33.0)(terser@5.51.2)(yaml@2.8.4))
+        specifier: ^5.1.1
+        version: 5.1.1(@microsoft/api-extractor@7.59.1(@types/node@22.20.2))(@vue/language-core@3.3.11)(esbuild@0.28.2)(rolldown@1.2.8)(rollup@4.63.3)(typescript@5.9.3)(vite@6.4.3(@types/node@22.20.2)(jiti@2.7.0)(lightningcss@1.33.0)(terser@5.51.2)(yaml@2.8.4))
       vitest:
         specifier: ^4.1.11
         version: 4.1.11(@types/node@22.20.2)(jsdom@25.0.1)(vite@6.4.3(@types/node@22.20.2)(jiti@2.7.0)(lightningcss@1.33.0)(terser@5.51.2)(yaml@2.8.4))
@@ -638,11 +638,14 @@ packages:
     engines: {node: '>=20.9.0'}
     hasBin: true
 
-  '@microsoft/tsdoc-config@0.18.1':
-    resolution: {integrity: sha512-9brPoVdfN9k9g0dcWkFeA7IH9bbcttzDJlXvkf8b2OBzd5MueR1V2wkKBL0abn0otvmkHJC6aapBOTJDDeMCZg==}
+  '@microsoft/tsdoc-config@0.18.2':
+    resolution: {integrity: sha512-4ymuLTQ9lFwJXK15f41iPcNHflymjk02Ltq5f5wo3fA02O1nHIGSc1TIZwzTSQZep+jXHM644jobt4Q8O3vtqg==}
 
   '@microsoft/tsdoc@0.16.0':
     resolution: {integrity: sha512-xgAyonlVVS+q7Vc7qLW0UrJU7rSFcETRWsqdXZtjzRU8dF+6CkozTK4V4y1LwOX7j8r/vHphjDeMeGI4tNGeGA==}
+
+  '@microsoft/tsdoc@0.17.0':
+    resolution: {integrity: sha512-p68VexhnH7ojf3U27RdryUDqnKJgKaWUbCL96vJR7N0mqDuhKG5OIECk3sCPPdynxjk+yoVhRkScqtv5KQjzsw==}
 
   '@napi-rs/lzma-linux-x64-gnu@1.5.1':
     resolution: {integrity: sha512-oTXEIha4SsuXdTA4Iyskj0kpdx2yVXdhd75c2v3xGrHFfVMsbhTPZU/nMPL4sWKo4pBHm3aucLaqGlF696dTyQ==}
@@ -1547,14 +1550,6 @@ packages:
   '@vue/devtools-shared@8.2.1':
     resolution: {integrity: sha512-Fkac7lUdGReh6pVOi3AYPRGe82LQqRmAfThW7RRligOAP0ZA/Z1z9XLHDM9dv34pV2HRc79DK8uKPeG2fLnA/g==}
 
-  '@vue/language-core@2.2.0':
-    resolution: {integrity: sha512-O1ZZFaaBGkKbsRfnVH1ifOK1/1BUkyK+3SQsfnh6PmMmD4qJcTU8godCeA96jjDRTL6zgnK7YzCHfaUlH2r0Mw==}
-    peerDependencies:
-      typescript: '*'
-    peerDependenciesMeta:
-      typescript:
-        optional: true
-
   '@vue/language-core@2.2.12':
     resolution: {integrity: sha512-IsGljWbKGU1MZpBPN+BvPAdr55YPkj2nB/TBNGNC32Vy2qLG25DYu/NBN2vNtZqdRbTRjaoYrahLrToim2NanA==}
     peerDependencies:
@@ -1641,9 +1636,6 @@ packages:
 
   ajv@8.20.0:
     resolution: {integrity: sha512-Thbli+OlOj+iMPYFBVBfJ3OmCAnaSyNn4M1vz9T6Gka5Jt9ba/HIR56joy65tY6kx/FCF5VXNB819Y7/GUrBGA==}
-
-  alien-signals@0.4.14:
-    resolution: {integrity: sha512-itUAVzhczTmP2U5yX67xVpsbbOiquusbWVyA9N+sy6+r6YVbFkahXvNCeEPWEOMhwDYwbVbGHFkVL03N9I5g+Q==}
 
   alien-signals@1.0.13:
     resolution: {integrity: sha512-OGj9yyTnJEttvzhTUWuscOvtqxq5vrhF7vL9oS0xJ2mK0ItPYP1/y+vCFebfxoEyAz0++1AIwJ5CMr+Fk3nDmg==}
@@ -2368,6 +2360,9 @@ packages:
   glob-parent@5.1.2:
     resolution: {integrity: sha512-AOIgSQCepiJYwP3ARnGx+5VnTu2HBYdzbGP45eLw1vr3zB3vZLeyed1sC9hnbcOc9/SrMyM5RPQrkGz4aS9Zow==}
     engines: {node: '>= 6'}
+
+  glob-to-regexp@0.4.1:
+    resolution: {integrity: sha512-lkX1HJXwyMcprw/5YUZc2s7DrpAiHB21/V+E1rHUrVNokkvB6bqMzT0VfV6/86ZNabt1k14YOIaT7nDvOX3Iiw==}
 
   glob@10.5.0:
     resolution: {integrity: sha512-DfXN8DfhJ7NH3Oe7cFmu3NCu1wKbkReJ8TorzSAFbSKrlNaQSKfIzqYqVY8zlbs2NLBbWpRiU52GX2PbaBVNkg==}
@@ -3745,6 +3740,36 @@ packages:
     resolution: {integrity: sha512-gptHNQghINnc/vTGIk0SOFGFNXw7JVrlRUtConJRlvaw6DuX0wO5Jeko9sWrMBhh+PsYAZ7oXAiOnf/UKogyiw==}
     engines: {node: '>= 10.0.0'}
 
+  unplugin-dts@1.1.1:
+    resolution: {integrity: sha512-Z2VcabC0hjYuzF62oWmZXVoxagkM8bUWgqUy+dotoJTPnooR5mNaxbpv63JCmcaxdGCW2Bb75omK6FOryOYCRg==}
+    peerDependencies:
+      '@microsoft/api-extractor': '>=7'
+      '@rspack/core': ^1
+      '@vue/language-core': ^3.1.5
+      esbuild: '*'
+      rolldown: '*'
+      rollup: '>=3'
+      typescript: '>=4'
+      vite: '>=3'
+      webpack: ^4 || ^5
+    peerDependenciesMeta:
+      '@microsoft/api-extractor':
+        optional: true
+      '@rspack/core':
+        optional: true
+      '@vue/language-core':
+        optional: true
+      esbuild:
+        optional: true
+      rolldown:
+        optional: true
+      rollup:
+        optional: true
+      vite:
+        optional: true
+      webpack:
+        optional: true
+
   unplugin-utils@0.3.2:
     resolution: {integrity: sha512-xVToRh2CTmLk2HnEG7ac4rl1MJTT3RFkpS8B++/SnB0kXvuaavD+n3m/vrzyWQOdJNSZQACnbz01pnppbwV5BA==}
     engines: {node: '>=20.19.0'}
@@ -3960,12 +3985,17 @@ packages:
       vue-tsc:
         optional: true
 
-  vite-plugin-dts@4.5.4:
-    resolution: {integrity: sha512-d4sOM8M/8z7vRXHHq/ebbblfaxENjogAAekcfcDCCwAyvGqnPrc7f4NZbvItS+g4WTgerW0xDwSz5qz11JT3vg==}
+  vite-plugin-dts@5.1.1:
+    resolution: {integrity: sha512-U5dyX3DPFvHB+gaJIULn90kKGsXNYllyJ3vn491Y+LGu2nL5Fb8z7YgurN/Pi6ZFlnGljh2wSM0ZbFogSh4yAg==}
     peerDependencies:
-      typescript: '*'
-      vite: '*'
+      '@microsoft/api-extractor': '>=7'
+      rollup: '>=3'
+      vite: '>=3'
     peerDependenciesMeta:
+      '@microsoft/api-extractor':
+        optional: true
+      rollup:
+        optional: true
       vite:
         optional: true
 
@@ -4741,16 +4771,17 @@ snapshots:
   '@microsoft/api-extractor-model@7.33.12(@types/node@22.20.2)':
     dependencies:
       '@microsoft/tsdoc': 0.16.0
-      '@microsoft/tsdoc-config': 0.18.1
+      '@microsoft/tsdoc-config': 0.18.2
       '@rushstack/node-core-library': 5.24.1(@types/node@22.20.2)
     transitivePeerDependencies:
       - '@types/node'
+    optional: true
 
   '@microsoft/api-extractor@7.59.1(@types/node@22.20.2)':
     dependencies:
       '@microsoft/api-extractor-model': 7.33.12(@types/node@22.20.2)
       '@microsoft/tsdoc': 0.16.0
-      '@microsoft/tsdoc-config': 0.18.1
+      '@microsoft/tsdoc-config': 0.18.2
       '@rushstack/node-core-library': 5.24.1(@types/node@22.20.2)
       '@rushstack/rig-package': 0.7.3
       '@rushstack/terminal': 0.24.4(@types/node@22.20.2)
@@ -4763,15 +4794,21 @@ snapshots:
       typescript: 5.9.3
     transitivePeerDependencies:
       - '@types/node'
+    optional: true
 
-  '@microsoft/tsdoc-config@0.18.1':
+  '@microsoft/tsdoc-config@0.18.2':
     dependencies:
-      '@microsoft/tsdoc': 0.16.0
+      '@microsoft/tsdoc': 0.17.0
       ajv: 8.18.0
       jju: 1.4.0
       resolve: 1.22.12
+    optional: true
 
-  '@microsoft/tsdoc@0.16.0': {}
+  '@microsoft/tsdoc@0.16.0':
+    optional: true
+
+  '@microsoft/tsdoc@0.17.0':
+    optional: true
 
   '@napi-rs/lzma-linux-x64-gnu@1.5.1':
     optional: true
@@ -5403,15 +5440,18 @@ snapshots:
       semver: 7.7.4
     optionalDependencies:
       '@types/node': 22.20.2
+    optional: true
 
   '@rushstack/problem-matcher@0.2.1(@types/node@22.20.2)':
     optionalDependencies:
       '@types/node': 22.20.2
+    optional: true
 
   '@rushstack/rig-package@0.7.3':
     dependencies:
       jju: 1.4.0
       resolve: 1.22.12
+    optional: true
 
   '@rushstack/terminal@0.24.4(@types/node@22.20.2)':
     dependencies:
@@ -5420,6 +5460,7 @@ snapshots:
       supports-color: 8.1.1
     optionalDependencies:
       '@types/node': 22.20.2
+    optional: true
 
   '@rushstack/ts-command-line@5.3.14(@types/node@22.20.2)':
     dependencies:
@@ -5429,6 +5470,7 @@ snapshots:
       string-argv: 0.3.2
     transitivePeerDependencies:
       - '@types/node'
+    optional: true
 
   '@simple-git/args-pathspec@1.0.3': {}
 
@@ -5444,7 +5486,8 @@ snapshots:
 
   '@standard-schema/spec@1.1.0': {}
 
-  '@types/argparse@1.0.38': {}
+  '@types/argparse@1.0.38':
+    optional: true
 
   '@types/chai@5.2.3':
     dependencies:
@@ -5795,19 +5838,6 @@ snapshots:
 
   '@vue/devtools-shared@8.2.1': {}
 
-  '@vue/language-core@2.2.0(typescript@5.9.3)':
-    dependencies:
-      '@volar/language-core': 2.4.28
-      '@vue/compiler-dom': 3.5.42
-      '@vue/compiler-vue2': 2.7.16
-      '@vue/shared': 3.5.42
-      alien-signals: 0.4.14
-      minimatch: 9.0.9
-      muggle-string: 0.4.1
-      path-browserify: 1.0.1
-    optionalDependencies:
-      typescript: 5.9.3
-
   '@vue/language-core@2.2.12(typescript@5.9.3)':
     dependencies:
       '@volar/language-core': 2.4.15
@@ -5886,10 +5916,12 @@ snapshots:
   ajv-draft-04@1.0.0(ajv@8.20.0):
     optionalDependencies:
       ajv: 8.20.0
+    optional: true
 
   ajv-formats@3.0.1(ajv@8.20.0):
     optionalDependencies:
       ajv: 8.20.0
+    optional: true
 
   ajv@8.18.0:
     dependencies:
@@ -5897,6 +5929,7 @@ snapshots:
       fast-uri: 3.1.8
       json-schema-traverse: 1.0.0
       require-from-string: 2.0.2
+    optional: true
 
   ajv@8.20.0:
     dependencies:
@@ -5904,8 +5937,7 @@ snapshots:
       fast-uri: 3.1.8
       json-schema-traverse: 1.0.0
       require-from-string: 2.0.2
-
-  alien-signals@0.4.14: {}
+    optional: true
 
   alien-signals@1.0.13: {}
 
@@ -5956,6 +5988,7 @@ snapshots:
   argparse@1.0.10:
     dependencies:
       sprintf-js: 1.0.3
+    optional: true
 
   assertion-error@2.0.1: {}
 
@@ -6499,7 +6532,8 @@ snapshots:
 
   exsolve@1.1.1: {}
 
-  fast-deep-equal@3.1.3: {}
+  fast-deep-equal@3.1.3:
+    optional: true
 
   fast-fifo@1.3.2: {}
 
@@ -6521,7 +6555,8 @@ snapshots:
     dependencies:
       fast-string-truncated-width: 3.0.3
 
-  fast-uri@3.1.8: {}
+  fast-uri@3.1.8:
+    optional: true
 
   fast-wrap-ansi@0.2.2:
     dependencies:
@@ -6565,6 +6600,7 @@ snapshots:
       graceful-fs: 4.2.11
       jsonfile: 6.2.1
       universalify: 2.0.1
+    optional: true
 
   fsevents@2.3.3:
     optional: true
@@ -6612,6 +6648,8 @@ snapshots:
   glob-parent@5.1.2:
     dependencies:
       is-glob: 4.0.3
+
+  glob-to-regexp@0.4.1: {}
 
   glob@10.5.0:
     dependencies:
@@ -6662,7 +6700,8 @@ snapshots:
       ufo: 1.6.4
       uncrypto: 0.1.3
 
-  has-flag@4.0.0: {}
+  has-flag@4.0.0:
+    optional: true
 
   has-symbols@1.1.0: {}
 
@@ -6722,7 +6761,8 @@ snapshots:
 
   image-meta@0.2.2: {}
 
-  import-lazy@4.0.0: {}
+  import-lazy@4.0.0:
+    optional: true
 
   impound@1.2.0(esbuild@0.28.2)(rolldown@1.2.8)(rollup@4.63.3)(vite@6.4.3(@types/node@22.20.2)(jiti@2.7.0)(lightningcss@1.33.0)(terser@5.51.2)(yaml@2.8.4)):
     dependencies:
@@ -6821,7 +6861,8 @@ snapshots:
 
   jiti@2.7.0: {}
 
-  jju@1.4.0: {}
+  jju@1.4.0:
+    optional: true
 
   js-beautify@2.0.3:
     dependencies:
@@ -6867,7 +6908,8 @@ snapshots:
 
   jsesc@3.1.0: {}
 
-  json-schema-traverse@1.0.0: {}
+  json-schema-traverse@1.0.0:
+    optional: true
 
   json5@2.2.3: {}
 
@@ -6876,6 +6918,7 @@ snapshots:
       universalify: 2.0.1
     optionalDependencies:
       graceful-fs: 4.2.11
+    optional: true
 
   kleur@4.1.5: {}
 
@@ -7038,6 +7081,7 @@ snapshots:
   minimatch@10.2.3:
     dependencies:
       brace-expansion: 5.0.12
+    optional: true
 
   minimatch@10.2.6:
     dependencies:
@@ -7718,7 +7762,8 @@ snapshots:
     dependencies:
       redis-errors: 1.2.0
 
-  require-from-string@2.0.2: {}
+  require-from-string@2.0.2:
+    optional: true
 
   resolve-from@5.0.0: {}
 
@@ -7834,7 +7879,8 @@ snapshots:
 
   semver@6.3.1: {}
 
-  semver@7.7.4: {}
+  semver@7.7.4:
+    optional: true
 
   semver@7.8.5: {}
 
@@ -7922,7 +7968,8 @@ snapshots:
 
   source-map@0.8.0: {}
 
-  sprintf-js@1.0.3: {}
+  sprintf-js@1.0.3:
+    optional: true
 
   srvx@0.11.22: {}
 
@@ -7945,7 +7992,8 @@ snapshots:
       - bare-abort-controller
       - react-native-b4a
 
-  string-argv@0.3.2: {}
+  string-argv@0.3.2:
+    optional: true
 
   string-width@4.2.3:
     dependencies:
@@ -8005,6 +8053,7 @@ snapshots:
   supports-color@8.1.1:
     dependencies:
       has-flag: 4.0.0
+    optional: true
 
   supports-preserve-symlinks-flag@1.0.0: {}
 
@@ -8205,7 +8254,30 @@ snapshots:
       - vite
       - webpack
 
-  universalify@2.0.1: {}
+  universalify@2.0.1:
+    optional: true
+
+  unplugin-dts@1.1.1(@microsoft/api-extractor@7.59.1(@types/node@22.20.2))(@vue/language-core@3.3.11)(esbuild@0.28.2)(rolldown@1.2.8)(rollup@4.63.3)(typescript@5.9.3)(vite@6.4.3(@types/node@22.20.2)(jiti@2.7.0)(lightningcss@1.33.0)(terser@5.51.2)(yaml@2.8.4)):
+    dependencies:
+      '@rollup/pluginutils': 5.4.0(rollup@4.63.3)
+      '@volar/typescript': 2.4.28
+      compare-versions: 6.1.1
+      debug: 4.4.3
+      glob-to-regexp: 0.4.1
+      kolorist: 1.8.0
+      local-pkg: 1.2.1
+      magic-string: 0.30.21
+      typescript: 5.9.3
+      unplugin: 2.3.11
+    optionalDependencies:
+      '@microsoft/api-extractor': 7.59.1(@types/node@22.20.2)
+      '@vue/language-core': 3.3.11
+      esbuild: 0.28.2
+      rolldown: 1.2.8
+      rollup: 4.63.3
+      vite: 6.4.3(@types/node@22.20.2)(jiti@2.7.0)(lightningcss@1.33.0)(terser@5.51.2)(yaml@2.8.4)
+    transitivePeerDependencies:
+      - supports-color
 
   unplugin-utils@0.3.2:
     dependencies:
@@ -8336,24 +8408,21 @@ snapshots:
       typescript: 7.0.2
       vue-tsc: 3.3.11(typescript@7.0.2)
 
-  vite-plugin-dts@4.5.4(@types/node@22.20.2)(rollup@4.63.3)(typescript@5.9.3)(vite@6.4.3(@types/node@22.20.2)(jiti@2.7.0)(lightningcss@1.33.0)(terser@5.51.2)(yaml@2.8.4)):
+  vite-plugin-dts@5.1.1(@microsoft/api-extractor@7.59.1(@types/node@22.20.2))(@vue/language-core@3.3.11)(esbuild@0.28.2)(rolldown@1.2.8)(rollup@4.63.3)(typescript@5.9.3)(vite@6.4.3(@types/node@22.20.2)(jiti@2.7.0)(lightningcss@1.33.0)(terser@5.51.2)(yaml@2.8.4)):
     dependencies:
-      '@microsoft/api-extractor': 7.59.1(@types/node@22.20.2)
-      '@rollup/pluginutils': 5.4.0(rollup@4.63.3)
-      '@volar/typescript': 2.4.28
-      '@vue/language-core': 2.2.0(typescript@5.9.3)
-      compare-versions: 6.1.1
-      debug: 4.4.3
-      kolorist: 1.8.0
-      local-pkg: 1.2.1
-      magic-string: 0.30.21
-      typescript: 5.9.3
+      unplugin-dts: 1.1.1(@microsoft/api-extractor@7.59.1(@types/node@22.20.2))(@vue/language-core@3.3.11)(esbuild@0.28.2)(rolldown@1.2.8)(rollup@4.63.3)(typescript@5.9.3)(vite@6.4.3(@types/node@22.20.2)(jiti@2.7.0)(lightningcss@1.33.0)(terser@5.51.2)(yaml@2.8.4))
     optionalDependencies:
+      '@microsoft/api-extractor': 7.59.1(@types/node@22.20.2)
+      rollup: 4.63.3
       vite: 6.4.3(@types/node@22.20.2)(jiti@2.7.0)(lightningcss@1.33.0)(terser@5.51.2)(yaml@2.8.4)
     transitivePeerDependencies:
-      - '@types/node'
-      - rollup
+      - '@rspack/core'
+      - '@vue/language-core'
+      - esbuild
+      - rolldown
       - supports-color
+      - typescript
+      - webpack
 
   vite-plugin-inspect@11.4.1(@nuxt/kit@4.5.2(magic-string@1.4.1)(magicast@0.5.5)(rolldown@1.2.8)(unplugin@3.3.0(esbuild@0.28.2)(rolldown@1.2.8)(rollup@4.63.3)(vite@6.4.3(@types/node@22.20.2)(jiti@2.7.0)(lightningcss@1.33.0)(terser@5.51.2)(yaml@2.8.4))))(vite@6.4.3(@types/node@22.20.2)(jiti@2.7.0)(lightningcss@1.33.0)(terser@5.51.2)(yaml@2.8.4)):
     dependencies:
