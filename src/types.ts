@@ -64,7 +64,8 @@ export type SortableProps<T = unknown> = {
   ignore?: string
   motion?: SortableMotion
   canMove?: (payload: SortableCanMovePayload<T>) => boolean
-  canDrop?: (payload: SortableCanMovePayload<T>) => boolean
+  /** Return `false` or a string, the reason, to refuse an item coming from another list. */
+  canDrop?: (payload: SortableCanMovePayload<T>) => boolean | string
 }
 
 export type SortableDragPayload<T = unknown> = {
@@ -77,6 +78,8 @@ export type SortableDragPayload<T = unknown> = {
   group?: string
   /** A free drag whose pointer is over no list that could take the item. */
   outside?: boolean
+  /** The string `canDrop` returned to refuse the drop. */
+  reason?: string
 }
 
 export type SortableMovePayload<T = unknown> = SortableDragPayload<T> & {
@@ -119,14 +122,30 @@ export type SortableOverlayRenderState<T = unknown> = {
   dragging: boolean
   /** A free drag whose pointer is over no list that could take the item. */
   outside: boolean
+  /** `false` while a free drag is over a list that refuses it. */
+  allowed: boolean
+  /** The string that list returned to refuse it. */
+  reason?: string
   attrs: Record<string, unknown>
   style: CSSProperties
+}
+
+/** What a free drag in progress means for a list it could be dropped on. */
+export type SortableDropTarget = {
+  /** The pointer is over this list. */
+  over: boolean
+  /** `false` when this list refuses the drop under the pointer. */
+  allowed: boolean
+  /** The string this list returned to refuse it. */
+  reason?: string
 }
 
 export type SortableDefaultSlotProps<T = unknown> = {
   entries: SortableRenderEntry<T>[]
   dragging: boolean
   dropping: boolean
+  /** Set on every list a free drag in progress could be dropped on, its own included. */
+  dropTarget: SortableDropTarget | null
   listAttrs: SortableListAttrs
   getItemAttrs: (entry: SortableItemEntry<T>) => SortableItemAttrsResult
   getHandleAttrs: (entry: SortableItemEntry<T>) => Record<string, unknown>

@@ -12,6 +12,7 @@ import type {
   SortableCollision,
   SortableDefaultSlotProps,
   SortableDragPayload,
+  SortableDropTarget,
   SortableGroup,
   SortableItemAttrsResult,
   SortableItemEntry,
@@ -61,6 +62,9 @@ type OverlayState<T> = {
 }
 
 type DragState<T> = OverlayState<T> & {
+  /** Free drags only: what the list under the pointer answered, and the reason it gave when it refused. */
+  allowed: boolean
+  reason: string | undefined
   delayPassed: boolean
   direction: -1 | 0 | 1
   from: number
@@ -126,6 +130,7 @@ type SortableGroupEntry<T = unknown> = {
   readPlaceholderPosition: (activeKey: string) => OverlayPosition | null
   requestListMotion: () => void
   root: () => HTMLElement | null
+  setDropTarget: (state: SortableDropTarget | null) => void
   setExternalDrag: (state: ExternalDragState<T> | null) => void
 }
 
@@ -137,6 +142,8 @@ const groupedSortables = new Map<string, Set<SortableGroupEntry>>()
 export function getGroupedSortableEntries<T>(group: string): SortableGroupEntry<T>[] {
   return Array.from(groupedSortables.get(group) ?? []) as SortableGroupEntry<T>[]
 }
+
+const IDLE_DROP_TARGET: SortableDropTarget = { allowed: true, over: false }
 
 const ROOT_STYLE: CSSProperties = {
   position: 'relative',
@@ -163,6 +170,7 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
   const dragState = shallowRef<DragState<T> | null>(null)
   const dropState = shallowRef<DropState<T> | null>(null)
   const externalDragState = shallowRef<ExternalDragState<T> | null>(null)
+  const dropTargetState = shallowRef<SortableDropTarget | null>(null)
   const announcement = shallowRef('')
 
   let activationDelayTimer: number | null = null
@@ -227,6 +235,11 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
   const isDragging = computed(() => dragState.value?.started === true)
   const isDropping = computed(() => dropState.value !== null)
   const isSorting = computed(() => isDragging.value || isDropping.value)
+  const dropTargetAttr = computed(() => {
+    const target = dropTargetState.value
+    if (!target) return undefined
+    return target.over ? (target.allowed ? 'over' : 'refused') : 'idle'
+  })
 
   const overlayStyle = computed<CSSProperties | undefined>(() => {
     const overlay = overlayState.value
@@ -274,6 +287,9 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
     readPlaceholderPosition: activeKey => readPlaceholderPosition(activeKey),
     requestListMotion: () => requestListMotion(),
     root: () => getRootElement(),
+    setDropTarget: (state) => {
+      dropTargetState.value = state
+    },
     setExternalDrag: (state) => {
       externalDragState.value = state as ExternalDragState<T> | null
     },
@@ -340,6 +356,7 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
       : y + height / 2
 
     dragState.value = {
+      allowed: true,
       delayPassed: !shouldDelayActivation(event),
       direction: 0,
       element: entry.element,
@@ -361,6 +378,7 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
       pointerOffsetY: event.clientY - itemRect.top,
       previewIndex: entry.index,
       previewList: listId,
+      reason: undefined,
       startX: event.clientX,
       startY: event.clientY,
       started: false,
@@ -435,6 +453,7 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
       const nextState = retarget(state, target, event, direction)
       requestListMotion()
       updateGroupPreview(state, nextState, target.entry, previewIndex)
+      markDropTargets(nextState)
       dragState.value = nextState
       if (layout.value === 'flow') void nextTick(pinFlowOverlayAfterRender)
       emit.dragStart(payloadFromState(nextState))
@@ -451,6 +470,7 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
           : undefined,
       )
       updateGroupPreview(state, nextState, target.entry, previewIndex)
+      markDropTargets(nextState)
       dragState.value = nextState
       if (layout.value === 'flow') void nextTick(pinFlowOverlayAfterRender)
       emit.dragMove(movePayloadFromState(nextState, event))
@@ -486,8 +506,9 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
     event: PointerEvent,
     direction: -1 | 0 | 1,
   ): DragState<T> {
-    return {
+    const next: DragState<T> = {
       ...state,
+      allowed: true,
       direction,
       index: target.previewIndex,
       lastClientX: event.clientX,
@@ -497,8 +518,37 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
       outside: target.outside,
       previewIndex: target.previewIndex,
       previewList: target.entry.id,
+      reason: undefined,
       started: true,
       y: target.sourcePosition.y,
+    }
+    // A free drag asks the list under the pointer as it goes, so a refusal shows before the release.
+    if (next.free && !next.outside && target.entry.id !== listId) {
+      const verdict = judgeTarget(next, target.entry)
+      next.allowed = !isRefusal(verdict)
+      if (typeof verdict === 'string') next.reason = verdict
+    }
+    return next
+  }
+
+  function judgeTarget(state: DragState<T>, targetEntry: SortableGroupEntry<T>): unknown {
+    return targetEntry.props.canDrop?.(guardPayload(payloadFromState(state), targetEntry.props.modelValue)) ?? true
+  }
+
+  /** Tells every list a free drag could be dropped on that it is under way, and the one under the pointer its verdict. */
+  function markDropTargets(state: DragState<T>) {
+    if (!state.free) return
+
+    const candidates = new Set<SortableGroupEntry<T>>(state.group ? getGroupedSortableEntries<T>(state.group) : [])
+    candidates.add(groupEntry)
+    for (const entry of candidates) {
+      entry.setDropTarget(
+        entry.props.disabled
+          ? null
+          : entry.id === state.previewList && !state.outside
+            ? { allowed: state.allowed, over: true, reason: state.reason }
+            : IDLE_DROP_TARGET,
+      )
     }
   }
 
@@ -595,10 +645,11 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
   }
 
   function finishCrossListDrag(state: DragState<T>, targetEntry: SortableGroupEntry<T>) {
+    const sourceAllowed = props.canMove?.(guardPayload(payloadFromState(state), props.modelValue)) ?? true
+    const verdict = judgeTarget(state, targetEntry)
+    const allowed = sourceAllowed && !isRefusal(verdict)
+    state.reason = typeof verdict === 'string' ? verdict : undefined
     const payload = payloadFromState(state)
-    const sourceAllowed = props.canMove?.(guardPayload(payload, props.modelValue)) ?? true
-    const targetAllowed = targetEntry.props.canDrop?.(guardPayload(payload, targetEntry.props.modelValue)) ?? true
-    const allowed = sourceAllowed && targetAllowed
 
     const sourceEntries = entries.value
     const active = sourceEntries.find(entry => entry.key === state.key)
@@ -1071,9 +1122,11 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
   }
 
   function clearGroupPreview(state: DragState<T>) {
+    dropTargetState.value = null
     if (!state.group) return
 
     for (const entry of groupedSortables.get(state.group) ?? []) {
+      entry.setDropTarget(null)
       if (entry.id === listId) continue
       entry.clearExternalDrag()
     }
@@ -1432,6 +1485,7 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
       payload.toList = state.previewList
     }
     if (state.outside) payload.outside = true
+    if (state.reason !== undefined) payload.reason = state.reason
     return payload
   }
 
@@ -1554,8 +1608,10 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
     const overlay = overlayState.value
     if (!overlay) return null
 
-    const outside = dragState.value?.outside === true
+    const drag = dragState.value
+    const outside = drag?.outside === true
     return {
+      allowed: drag?.allowed !== false,
       attrs: {
         [DATA_ATTRIBUTES.overlay]: '',
         [DATA_ATTRIBUTES.overlayKey]: overlay.key,
@@ -1569,6 +1625,7 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
       index: overlay.index,
       key: overlay.key,
       outside,
+      reason: drag?.reason,
       style: overlayStyle.value ?? {},
     }
   }
@@ -1576,6 +1633,7 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
   function getDefaultSlotProps(): SortableDefaultSlotProps<T> {
     return {
       dragging: isDragging.value,
+      dropTarget: dropTargetState.value,
       dropping: isDropping.value,
       entries: layoutEntries.value,
       getHandleAttrs,
@@ -1646,6 +1704,7 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
 
   return {
     announcement,
+    dropTargetAttr,
     entries,
     getDefaultSlotProps,
     getHandleAttrs,
@@ -1662,6 +1721,11 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
     overlayStyle,
     rootStyle: ROOT_STYLE,
   }
+}
+
+/** `canDrop` and `canReceive` refuse with `false` or with a string, the reason. */
+function isRefusal(verdict: unknown) {
+  return typeof verdict === 'string' || !verdict
 }
 
 function forceLayoutRead(element: HTMLElement) {
