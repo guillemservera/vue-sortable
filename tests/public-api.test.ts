@@ -13,6 +13,14 @@ import type {
   SortableMotion,
   SortableProps,
 } from '../src'
+import { SortableSource } from '../src'
+import type {
+  SortableDropTarget,
+  SortableMovePayload,
+  SortableReceivePayload,
+  SortableSourceProps,
+  SortableSourceSlotProps,
+} from '../src'
 
 type Item = {
   id: string
@@ -53,5 +61,43 @@ describe('public API contract', () => {
     expectTypeOf<SortableDefaultSlotProps<Item>['getItemAttrs']>().toBeFunction()
     expectTypeOf<ReturnType<SortableDefaultSlotProps<Item>['getItemAttrs']>>().toEqualTypeOf<SortableItemAttrsResult>()
     expectTypeOf<SortableOverlayRenderState<Item>['style']>().toBeObject()
+  })
+})
+
+describe('public API contract for free movement and sources', () => {
+  it('exports the drag source', () => {
+    expect(SortableSource).toBeDefined()
+  })
+
+  it('keeps the new props optional and a 0.2 guard assignable', () => {
+    expectTypeOf<SortableProps<Item>>().toMatchTypeOf<{
+      movement?: 'axis' | 'free'
+      removeOnDropOutside?: boolean
+      canDrop?: (payload: SortableCanMovePayload<Item>) => boolean | string
+      canReceive?: (payload: SortableReceivePayload<Item>) => boolean | string
+    }>()
+    expectTypeOf<{ modelValue: Item[], itemKey: 'id' }>().toMatchTypeOf<SortableProps<Item>>()
+    expectTypeOf<(payload: SortableCanMovePayload<Item>) => boolean>()
+      .toMatchTypeOf<NonNullable<SortableProps<Item>['canDrop']>>()
+  })
+
+  it('types what a free drag reports', () => {
+    expectTypeOf<SortableDragPayload<Item>>().toHaveProperty('outside').toEqualTypeOf<boolean | undefined>()
+    expectTypeOf<SortableMovePayload<Item>>().toHaveProperty('reason').toEqualTypeOf<string | undefined>()
+    expectTypeOf<SortableCanMovePayload<Item>>().toHaveProperty('outside').toEqualTypeOf<boolean | undefined>()
+    expectTypeOf<SortableDefaultSlotProps<Item>['dropTarget']>().toEqualTypeOf<SortableDropTarget | null>()
+    expectTypeOf<SortableOverlayRenderState<Item>>().toMatchTypeOf<{ allowed: boolean, outside: boolean, reason?: string }>()
+  })
+
+  it('types a source and what a list receives from it', () => {
+    expectTypeOf<SortableSourceProps<Item>>().toMatchTypeOf<{ data: Item, group: string | { name: string } }>()
+    expectTypeOf<SortableSourceSlotProps<Item>['overlay']>().toEqualTypeOf<SortableOverlayRenderState<Item> | null>()
+    expectTypeOf<SortableReceivePayload<Item>>().toEqualTypeOf<{
+      data: unknown
+      to: number
+      toList: string
+      group: string
+      items: Item[]
+    }>()
   })
 })

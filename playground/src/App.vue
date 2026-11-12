@@ -5,7 +5,9 @@ import CanMoveExample from './examples/CanMoveExample.vue'
 import CustomOverlayExample from './examples/CustomOverlayExample.vue'
 import HandlesExample from './examples/HandlesExample.vue'
 import HorizontalExample from './examples/HorizontalExample.vue'
+import KanbanExample from './examples/KanbanExample.vue'
 import MotionDisabledExample from './examples/MotionDisabledExample.vue'
+import PaletteExample from './examples/PaletteExample.vue'
 
 const examples = [
   { id: 'basic', label: 'Basic', component: BasicExample },
@@ -14,6 +16,8 @@ const examples = [
   { id: 'overlay', label: 'Custom overlay', component: CustomOverlayExample },
   { id: 'motion-disabled', label: 'Motion disabled', component: MotionDisabledExample },
   { id: 'can-move', label: 'Can move', component: CanMoveExample },
+  { id: 'kanban', label: 'Kanban', component: KanbanExample },
+  { id: 'palette', label: 'Palette', component: PaletteExample },
 ] as const
 
 const activeId = ref<(typeof examples)[number]['id']>('basic')

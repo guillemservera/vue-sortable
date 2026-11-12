@@ -7,6 +7,7 @@ import type {
   SortableDefaultSlotProps,
   SortableDragPayload,
   SortableMovePayload,
+  SortableReceivePayload,
 } from '../types'
 
 defineOptions({
@@ -23,6 +24,7 @@ const props = withDefaults(defineProps<SortableProps<T>>(), {
 	ignore: DEFAULT_IGNORE_SELECTOR,
 	layout: 'axis',
 	motion: () => DEFAULT_MOTION,
+	movement: 'axis',
 	orientation: 'vertical',
 	overlap: DEFAULT_OVERLAP,
 })
@@ -32,6 +34,8 @@ const emit = defineEmits<{
   'drag-start': [payload: SortableDragPayload<T>]
   'drag-move': [payload: SortableMovePayload<T>]
   reorder: [payload: SortableDragPayload<T>]
+  remove: [payload: SortableDragPayload<T>]
+  receive: [payload: SortableReceivePayload<T>]
   'drag-end': [payload: SortableDragPayload<T>]
   'drag-cancel': [payload: SortableDragPayload<T>]
 }>()
@@ -54,6 +58,8 @@ const sortable = useSortableList<T>({
     dragEnd: payload => emit('drag-end', payload),
     dragMove: payload => emit('drag-move', payload),
     dragStart: payload => emit('drag-start', payload),
+    receive: payload => emit('receive', payload),
+    remove: payload => emit('remove', payload),
     reorder: payload => emit('reorder', payload),
     updateModelValue: value => emit('update:modelValue', value),
   },
@@ -77,6 +83,7 @@ defineExpose({
     v-bind="forwardedAttrs"
     :data-vuesortable-disabled="props.disabled ? 'true' : 'false'"
     :data-vuesortable-dragging="sortable.isDragging.value ? 'true' : 'false'"
+    :data-vuesortable-drop-target="sortable.dropTargetAttr.value"
     :data-vuesortable-dropping="sortable.isDropping.value ? 'true' : 'false'"
     :data-vuesortable-layout="props.layout"
     :data-vuesortable-orientation="props.orientation"
@@ -104,6 +111,7 @@ defineExpose({
     v-bind="forwardedAttrs"
     :data-vuesortable-disabled="props.disabled ? 'true' : 'false'"
     :data-vuesortable-dragging="sortable.isDragging.value ? 'true' : 'false'"
+    :data-vuesortable-drop-target="sortable.dropTargetAttr.value"
     :data-vuesortable-dropping="sortable.isDropping.value ? 'true' : 'false'"
     :data-vuesortable-layout="props.layout"
     :data-vuesortable-orientation="props.orientation"
