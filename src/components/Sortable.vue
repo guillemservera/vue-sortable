@@ -23,6 +23,7 @@ const props = withDefaults(defineProps<SortableProps<T>>(), {
 	ignore: DEFAULT_IGNORE_SELECTOR,
 	layout: 'axis',
 	motion: () => DEFAULT_MOTION,
+	movement: 'axis',
 	orientation: 'vertical',
 	overlap: DEFAULT_OVERLAP,
 })

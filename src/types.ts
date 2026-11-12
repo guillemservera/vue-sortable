@@ -8,6 +8,8 @@ export type SortableCollision = 'overlap' | 'center'
 
 export type SortableLayout = 'axis' | 'flow'
 
+export type SortableMovement = 'axis' | 'free'
+
 export type SortableGroup = string | { name: string }
 
 export type SortableActivation = {
@@ -55,6 +57,7 @@ export type SortableProps<T = unknown> = {
   behavior?: SortableBehavior
   collision?: SortableCollision
   group?: SortableGroup
+  movement?: SortableMovement
   overlap?: number
   activation?: SortableActivation
   handle?: string
@@ -72,6 +75,8 @@ export type SortableDragPayload<T = unknown> = {
   fromList?: string
   toList?: string
   group?: string
+  /** A free drag whose pointer is over no list that could take the item. */
+  outside?: boolean
 }
 
 export type SortableMovePayload<T = unknown> = SortableDragPayload<T> & {
@@ -112,6 +117,8 @@ export type SortableOverlayRenderState<T = unknown> = {
   index: number
   key: string
   dragging: boolean
+  /** A free drag whose pointer is over no list that could take the item. */
+  outside: boolean
   attrs: Record<string, unknown>
   style: CSSProperties
 }

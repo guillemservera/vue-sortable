@@ -50,6 +50,8 @@ type ListMotionMove = {
 
 type OverlayState<T> = {
   element: T
+  /** A free drag: `left` and `y` are viewport coordinates and the overlay is `position: fixed`. */
+  free: boolean
   height: number
   index: number
   key: string
@@ -69,6 +71,8 @@ type DragState<T> = OverlayState<T> & {
   lastClientY: number
   lastCollisionPoint: number
   layout: LayoutSnapshot<T>
+  /** Free drags only: the pointer is over no list that could take the item. */
+  outside: boolean
   pointerOffsetX: number
   pointerOffsetY: number
   previewIndex: number
@@ -178,6 +182,7 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
   const layout = computed<SortableLayout>(() => props.layout ?? 'axis')
   const collision = computed<SortableCollision>(() => props.collision ?? 'overlap')
   const groupName = computed(() => normalizeGroupName(props.group))
+  const free = computed(() => props.movement === 'free')
   const overlap = computed(() => clamp(props.overlap ?? DEFAULT_OVERLAP, 0, 1))
   const motion = computed(() => normalizeMotion(props.motion))
 
@@ -232,7 +237,7 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
       height: `${overlay.height}px`,
       left: '0px',
       pointerEvents: 'none',
-      position: 'absolute',
+      position: overlay.free ? 'fixed' : 'absolute',
       top: '0px',
       transform: `translate3d(${overlay.left}px, ${overlay.y}px, 0)`,
       width: `${overlay.width}px`,
@@ -318,12 +323,17 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
     const width = measuredItem?.width ?? itemRect.width
     const initialLeft = measuredItem?.left ?? itemRect.left - rootGeometry.left
     const initialY = measuredItem?.top ?? itemRect.top - rootGeometry.top
-    const left = orientation.value === 'horizontal'
-      ? clamp(initialLeft, 0, Math.max(0, rootGeometry.width - width))
-      : initialLeft
-    const y = orientation.value === 'horizontal'
-      ? initialY
-      : clamp(initialY, 0, Math.max(0, rootGeometry.height - height))
+    const isFree = free.value
+    const left = isFree
+      ? itemRect.left
+      : orientation.value === 'horizontal'
+        ? clamp(initialLeft, 0, Math.max(0, rootGeometry.width - width))
+        : initialLeft
+    const y = isFree
+      ? itemRect.top
+      : orientation.value === 'horizontal'
+        ? initialY
+        : clamp(initialY, 0, Math.max(0, rootGeometry.height - height))
 
     const initialCollisionPoint = orientation.value === 'horizontal'
       ? left + width / 2
@@ -333,6 +343,7 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
       delayPassed: !shouldDelayActivation(event),
       direction: 0,
       element: entry.element,
+      free: isFree,
       from: entry.index,
       fromList: listId,
       group: groupName.value,
@@ -345,6 +356,7 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
       lastCollisionPoint: initialCollisionPoint,
       layout,
       left,
+      outside: false,
       pointerOffsetX: event.clientX - itemRect.left,
       pointerOffsetY: event.clientY - itemRect.top,
       previewIndex: entry.index,
@@ -431,10 +443,10 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
       return
     }
 
-    if (previewIndex !== state.previewIndex || target.entry.id !== state.previewList) {
+    if (previewIndex !== state.previewIndex || target.entry.id !== state.previewList || target.outside !== state.outside) {
       const nextState = retarget(state, target, event, direction)
       requestListMotion(
-        target.entry.id === state.previewList
+        target.entry.id === state.previewList && target.outside === state.outside
           ? { from: state.previewIndex, to: previewIndex }
           : undefined,
       )
@@ -482,6 +494,7 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
       lastClientY: event.clientY,
       lastCollisionPoint: target.collisionPoint,
       left: target.sourcePosition.left,
+      outside: target.outside,
       previewIndex: target.previewIndex,
       previewList: target.entry.id,
       started: true,
@@ -492,8 +505,14 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
   function applyOverlayTransform(left: number, y: number) {
     if (!canUseDOM()) return
     const root = getRootElement()
-    const overlayEl = root?.parentElement?.querySelector<HTMLElement>(`[${DATA_ATTRIBUTES.overlay}]`)
-      ?? document.querySelector<HTMLElement>(`[${DATA_ATTRIBUTES.overlay}]`)
+    const state = dragState.value
+    // A free overlay may be teleported, and several lists can show one at once: find it by its key.
+    const overlayEl = state?.free
+      ? Array
+          .from(document.querySelectorAll<HTMLElement>(`[${DATA_ATTRIBUTES.overlay}]`))
+          .find(element => element.dataset.vuesortableOverlayKey === state.key)
+      : root?.parentElement?.querySelector<HTMLElement>(`[${DATA_ATTRIBUTES.overlay}]`)
+        ?? document.querySelector<HTMLElement>(`[${DATA_ATTRIBUTES.overlay}]`)
     if (overlayEl) overlayEl.style.transform = `translate3d(${left}px, ${y}px, 0)`
   }
 
@@ -509,6 +528,11 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
     }
 
     state = resolveFinalDragState(event, state)
+    if (state.outside) {
+      finishOutsideDrag(state)
+      return
+    }
+
     const targetEntry = state.group
       ? getRegisteredGroupEntry(state.group, state.previewList) as SortableGroupEntry<T> | null
       : null
@@ -522,7 +546,7 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
     const moved = payload.from !== payload.to
     const finalEntries = allowed && moved ? buildFinalEntries(state) : entries.value
     const targetPosition = allowed
-      ? readPlaceholderPosition(state.key) ?? estimateTargetPosition(state)
+      ? toOverlaySpace(readPlaceholderPosition(state.key) ?? estimateTargetPosition(state), groupEntry, state)
       : originalTargetPosition(state)
 
     if (allowed && moved) requestListMotion()
@@ -545,6 +569,7 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
       dropping: false,
       element: state.element,
       entries: finalEntries,
+      free: state.free,
       from: state.from,
       height: state.height,
       index: allowed ? payload.to : state.from,
@@ -559,7 +584,7 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
 
   function resolveFinalDragState(event: PointerEvent, state: DragState<T>) {
     const target = resolveDragTarget(event, state, state.direction)
-    if (target.previewIndex === state.previewIndex && target.entry.id === state.previewList) {
+    if (target.previewIndex === state.previewIndex && target.entry.id === state.previewList && target.outside === state.outside) {
       return state
     }
 
@@ -582,9 +607,10 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
       ? insertEntry(targetEntry.entries(), active, state.previewIndex)
       : targetEntry.entries()
     const targetPosition = allowed
-      ? convertPositionFromEntry(
-          targetEntry,
+      ? toOverlaySpace(
           targetEntry.readPlaceholderPosition(state.key) ?? estimateTargetPosition(state, targetEntry),
+          targetEntry,
+          state,
         )
       : originalTargetPosition(state)
 
@@ -613,6 +639,7 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
       dropping: false,
       element: state.element,
       entries: sourceFinalEntries,
+      free: state.free,
       from: state.from,
       height: state.height,
       index: allowed ? payload.to : state.from,
@@ -624,6 +651,33 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
       width: state.width,
       y: state.y,
     }, targetPosition)
+  }
+
+  /** A free drag released over no list: nothing moves, and the overlay returns to where the item was. */
+  function finishOutsideDrag(state: DragState<T>) {
+    const payload = payloadFromState(state)
+    emit.dragCancel(payload)
+    emit.dragEnd(payload)
+    clearPointerListeners()
+    restoreDocumentDragCursor()
+    clearGroupPreview(state)
+    dragState.value = null
+
+    startDropAnimation({
+      dropping: false,
+      element: state.element,
+      entries: entries.value,
+      free: state.free,
+      from: state.from,
+      height: state.height,
+      index: state.from,
+      item: state.item,
+      key: state.key,
+      left: state.left,
+      to: state.from,
+      width: state.width,
+      y: state.y,
+    }, originalTargetPosition(state))
   }
 
   function handlePointerCancel() {
@@ -698,14 +752,29 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
   }
 
   function resolveDragTarget(event: PointerEvent, state: DragState<T>, direction: -1 | 0 | 1) {
-    const targetEntry = getGroupedTargetEntry(event, state) ?? groupEntry
+    const hit = getGroupedTargetEntry(event, state)
+    if (state.free && !hit) {
+      // Over no list: the placeholder goes back to where the item came from.
+      return {
+        collisionPoint: state.lastCollisionPoint,
+        entry: groupEntry,
+        outside: true,
+        previewIndex: state.from,
+        sourcePosition: resolveOverlayPosition(event, state),
+      }
+    }
+
+    const targetEntry = hit ?? groupEntry
+    // Another list of a free drag: its items may run along another axis and be of another size, so the pointer
+    // itself is compared with their centers (no approach direction, no overlap of the dragged item's body).
+    const foreign = state.free && targetEntry.id !== listId
     const targetLayout = targetEntry.id === listId
       ? state.layout
       : targetEntry.measureLayout() ?? state.layout
     const targetPosition = resolveOverlayPositionForEntry(event, state, targetEntry)
     const stateForFind = {
       ...state,
-      direction,
+      direction: foreign ? 0 as const : direction,
       layout: targetLayout as LayoutSnapshot<T>,
     }
     // In flow layouts the placeholder's live rect participates in the index
@@ -726,7 +795,7 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
       : undefined
     const pinnedPlaceholder = placeholderPosition ? toSourceRootPosition(placeholderPosition, targetEntry) : null
     const freePosition = resolveOverlayPosition(event, state, targetEntry.id === listId ? null : targetEntry)
-    const sourcePosition = pinnedPlaceholder ? pinFlowOverlay(freePosition, pinnedPlaceholder) : freePosition
+    const sourcePosition = pinnedPlaceholder && !state.free ? pinFlowOverlay(freePosition, pinnedPlaceholder) : freePosition
     // Root-relative cursor position: flow layouts aim line selection with the
     // actual pointer instead of the overlay centre (off-centre grabs diverge).
     const targetRoot = targetEntry.layout() === 'flow' ? targetEntry.root() : null
@@ -747,6 +816,7 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
     return {
       collisionPoint,
       entry: targetEntry,
+      outside: false,
       previewIndex,
       sourcePosition,
     }
@@ -779,7 +849,7 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
   // overlay there without waiting for the next pointer move.
   function pinFlowOverlayAfterRender() {
     const state = dragState.value
-    if (!state?.started) return
+    if (!state?.started || state.free) return
 
     const entry = state.previewList === listId
       ? groupEntry
@@ -798,6 +868,7 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
 
   function getGroupedTargetEntry(event: PointerEvent, state: DragState<T>): SortableGroupEntry<T> | null {
     const group = groupName.value
+    if (state.free) return findFreeTarget(event, group)
     if (!group) return null
 
     const candidates: Array<{ entry: SortableGroupEntry<T>, rect: DOMRect }> = []
@@ -829,6 +900,35 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
         entry: candidate.entry,
       }))
       .sort((a, b) => a.distance - b.distance)[0]?.entry ?? null
+  }
+
+  /**
+   * The target of a free drag: the list under the pointer, whatever its orientation or layout, and the innermost
+   * one when their boxes overlap. Null over none.
+   */
+  function findFreeTarget(event: PointerEvent, group: string | null): SortableGroupEntry<T> | null {
+    // shortcut: boxes are compared, so a list clipped by a scroll container still takes the pointer over its
+    // hidden part; switch to document.elementFromPoint if that matters.
+    const candidates = new Set<SortableGroupEntry<T>>(group ? getGroupedSortableEntries<T>(group) : [])
+    candidates.add(groupEntry)
+
+    let target: SortableGroupEntry<T> | null = null
+    let targetArea = Infinity
+    for (const entry of candidates) {
+      const root = entry.root()
+      if (entry.props.disabled || !root?.isConnected) continue
+
+      const rect = root.getBoundingClientRect()
+      if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) continue
+
+      const area = rect.width * rect.height
+      if (area < targetArea) {
+        target = entry
+        targetArea = area
+      }
+    }
+
+    return target
   }
 
   function updateGroupPreview(previousState: DragState<T>, nextState: DragState<T>, targetEntry: SortableGroupEntry<T>, previewIndex: number) {
@@ -893,6 +993,13 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
   }
 
   function resolveOverlayPosition(event: PointerEvent, state: DragState<T>, overflowEntry: SortableGroupEntry<T> | null = null): OverlayPosition {
+    if (state.free) {
+      return {
+        left: event.clientX - state.pointerOffsetX,
+        y: event.clientY - state.pointerOffsetY,
+      }
+    }
+
     const root = getRootElement()
     if (!root) return { left: state.left, y: state.y }
 
@@ -925,6 +1032,13 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
     if (!root) return resolveOverlayPosition(event, state)
 
     const rootGeometry = getRootGeometry(root)
+    if (state.free && entry.id !== listId) {
+      return {
+        left: event.clientX - rootGeometry.left - state.width / 2,
+        y: event.clientY - rootGeometry.top - state.height / 2,
+      }
+    }
+
     if (entry.layout() === 'flow') {
       return {
         left: event.clientX - rootGeometry.left - state.pointerOffsetX,
@@ -1014,14 +1128,25 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
     }
   }
 
+  /** A position in `entry`'s root, as the overlay of this drag is placed: in this root, or in the viewport when free. */
+  function toOverlaySpace(position: OverlayPosition, entry: SortableGroupEntry<T>, state: DragState<T>): OverlayPosition {
+    if (!state.free) return entry.id === listId ? position : convertPositionFromEntry(entry, position)
+
+    const root = entry.root()
+    if (!root) return position
+
+    const rootGeometry = getRootGeometry(root)
+    return {
+      left: position.left + rootGeometry.left,
+      y: position.y + rootGeometry.top,
+    }
+  }
+
   function originalTargetPosition(state: DragState<T>) {
     const original = state.layout.items.find(item => item.key === state.key)
     if (!original) return { left: state.left, y: state.y }
 
-    return {
-      left: original.left,
-      y: original.top,
-    }
+    return toOverlaySpace({ left: original.left, y: original.top }, groupEntry, state)
   }
 
   /** Index band a same-list crossing can displace (placeholder from → to). */
@@ -1306,6 +1431,7 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
       payload.group = state.group
       payload.toList = state.previewList
     }
+    if (state.outside) payload.outside = true
     return payload
   }
 
@@ -1428,6 +1554,7 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
     const overlay = overlayState.value
     if (!overlay) return null
 
+    const outside = dragState.value?.outside === true
     return {
       attrs: {
         [DATA_ATTRIBUTES.overlay]: '',
@@ -1435,11 +1562,13 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
         'aria-hidden': 'true',
         'data-vuesortable-dragging': isSorting.value ? 'true' : 'false',
         'data-vuesortable-dropping': dropState.value?.dropping ? 'true' : 'false',
+        'data-vuesortable-outside': outside ? 'true' : 'false',
       },
       dragging: isDragging.value,
       element: overlay.element,
       index: overlay.index,
       key: overlay.key,
+      outside,
       style: overlayStyle.value ?? {},
     }
   }
