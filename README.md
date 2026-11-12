@@ -6,7 +6,7 @@ VueSortable is not a SortableJS wrapper. It is a Vue-native primitive for axis-f
 
 ## Status
 
-VueSortable is currently in an early `0.x` release. The stable paths are axis reordering (single-list vertical/horizontal lists and grouped axis lists) and wrapped `flow` rows (chip bars and tag lists that wrap across lines). Flow is still not a SortableJS-style freeform/grid replacement.
+VueSortable is currently in an early `0.x` release. The stable paths are axis reordering (single-list vertical/horizontal lists and grouped axis lists) and wrapped `flow` rows (chip bars and tag lists that wrap across lines). Free movement between lists of any orientation and layout, drag sources that are not list items, and removal on a drop outside are newer and opt-in. Flow is still not a SortableJS-style freeform/grid replacement.
 
 Nuxt 4 SSR compatibility is validated with a dedicated fixture under `examples/nuxt-basic`.
 
@@ -22,6 +22,9 @@ The primitive handles sorting state, geometry, pointer events, placeholder place
 - Dependency-free runtime, with `vue` as the only peer dependency.
 - Single-list and grouped axis reorder with controlled `v-model`.
 - Vertical and horizontal orientation.
+- Opt-in free movement between lists side by side, along different axes, or wrapped and unwrapped.
+- Drag sources that are not list items (`SortableSource`), turned into an item by the list that receives them.
+- Drop verdicts with a reason while dragging, and removal on a drop outside every list.
 - Handle and ignore selectors.
 - Keyboard reordering through returned handle attrs.
 - Local overlay state and normal-flow placeholder entries.
@@ -144,6 +147,7 @@ Use `<ClientOnly>` only when your own item markup renders browser-only component
 
 ```ts
 export { default as Sortable } from './components/Sortable.vue'
+export { default as SortableSource } from './components/SortableSource.vue'
 export { reorderItems, moveItem } from './utils/reorder'
 export type * from './types'
 ```
@@ -164,13 +168,16 @@ export type * from './types'
 | `behavior` | `'insert'` | `'insert'` |
 | `collision` | `'overlap' \| 'center'` | `'overlap'` |
 | `group` | `string \| { name: string }` | `undefined` |
+| `movement` | `'axis' \| 'free'` | `'axis'` |
+| `removeOnDropOutside` | `boolean` | `false` |
 | `overlap` | `number` | `0.5` |
 | `activation` | `{ threshold?: number, delay?: number, delayOnTouchOnly?: boolean }` | `{ threshold: 4 }` |
 | `handle` | `string` | `undefined` |
 | `ignore` | `string` | `button,input,textarea,select,a,[contenteditable="true"],[data-sortable-ignore]` |
 | `motion` | `false \| SortableMotion` | FLIP list and snap drop motion |
 | `canMove` | `(payload: SortableCanMovePayload<T>) => boolean` | `undefined` |
-| `canDrop` | `(payload: SortableCanMovePayload<T>) => boolean` | `undefined` |
+| `canDrop` | `(payload: SortableCanMovePayload<T>) => boolean \| string` | `undefined` |
+| `canReceive` | `(payload: SortableReceivePayload<T>) => boolean \| string` | `undefined` |
 
 `class` and `style` are normal Vue attrs and are applied to the root element. They are not typed as props.
 
@@ -188,6 +195,11 @@ export type * from './types'
 | `reorder` | `{ item: T, key: string, from: number, to: number, fromList?: string, toList?: string, group?: string }` |
 | `drag-end` | `{ item: T, key: string, from: number, to: number, fromList?: string, toList?: string, group?: string }` |
 | `drag-cancel` | `{ item: T, key: string, from: number, to: number, fromList?: string, toList?: string, group?: string }` |
+
+| `remove` | the `drag-end` payload, with `outside: true` |
+| `receive` | `{ data: unknown, to: number, toList: string, group: string, items: T[] }` |
+
+With free movement the drag payloads also carry `outside: true` while the pointer is over no list, and `reason` when the list under the pointer refused the drop with one. Neither key is present otherwise.
 
 `reorder` is emitted only when the model changes. `drag-end` is emitted after an active drag ends, even if the item returns to its original position.
 
@@ -224,7 +236,7 @@ Use `layout="flow"` for wrapped rows (chip bars, tag lists). Flow layout uses th
 
 ### Groups
 
-Set the same `group` on multiple sortables to allow moving items between those lists. Grouped lists must use the same item type, orientation, and layout mode. Pass a stable `listId` for each grouped list when you need durable payloads or tests. Each list still owns its own `v-model`; when an item moves across lists, VueSortable emits `update:modelValue` on the source and target lists, then emits the source list's drag/reorder events with `fromList`, `toList`, and `group` populated.
+Set the same `group` on multiple sortables to allow moving items between those lists. With the default `movement="axis"`, grouped lists must use the same item type, orientation, and layout mode, and axis lists are told apart along their axis only, so they sit one after another on it; see [Free movement](#free-movement) for lists side by side or of different orientations. Pass a stable `listId` for each grouped list when you need durable payloads or tests. Each list still owns its own `v-model`; when an item moves across lists, VueSortable emits `update:modelValue` on the source and target lists, then emits the source list's drag/reorder events with `fromList`, `toList`, and `group` populated.
 
 Use `canMove` to let the source list reject a move and `canDrop` to let a target grouped list reject an incoming item. Both hooks receive the same payload shape; `items` is the current model for the list whose hook is running.
 
@@ -244,6 +256,133 @@ Use `canMove` to let the source list reject a move and `canDrop` to let a target
 />
 ```
 
+### Free movement
+
+`movement="axis"` is the default: the overlay stays on the list's axis and inside the grouped lists, which must share orientation and layout.
+
+Set `movement="free"` on a list to let its items go anywhere. The overlay follows the pointer on both axes with `position: fixed`, and the target is the grouped list whose root is under the pointer, whatever its orientation or layout: columns side by side, a wrapped row above a vertical stack. In its own list an item is placed as with axis movement, except that the overlay of a `flow` list is no longer held on the placeholder's row. In another list the pointer is compared with the centers of that list's items, because the dragged item may be of another size.
+
+```vue
+<Sortable v-model="todo" item-key="id" group="board" list-id="todo" movement="free" />
+<Sortable v-model="done" item-key="id" group="board" list-id="done" movement="free" />
+```
+
+What follows from that:
+
+- The movement is the dragged item's list's. Set it on every list of the group that items can leave.
+- The root element is what a list is dropped on. Give it the size of the drop area (a column's whole height, say), and an empty list a size at all.
+- The placeholder and the overlay keep the size the item had where it was picked up. Override the placeholder's `width` or `height` when a list lays its items out differently.
+- A `position: fixed` element is offset by an ancestor with a `transform`, `filter`, or `contain`. Render the overlay in a `<Teleport to="body">` when that applies.
+- Over no list, or over a disabled one, the placeholder returns to where the item was and a release cancels the drag (`drag-cancel`, then `drag-end`, both with `outside: true`). The overlay state has `outside` too, and the overlay element `data-vuesortable-outside`.
+- Lists clipped by a scroll container are still hit over their hidden part, and nothing scrolls automatically while dragging.
+
+Lists of one group that hold items of different shapes work, but not through `v-model`: bind `:model-value`, and apply the move yourself in `@reorder`, where `fromList`, `toList`, and `to` say what happened.
+
+### Drop verdicts
+
+`canDrop` (and `canReceive`, for a [source](#sortablesource)) refuses a drop by returning `false`, or a string that says why.
+
+With axis movement the hook runs once, on release. With free movement it also runs while dragging, each time the list or the index under the pointer changes, so the refusal can be shown before the drop. Keep it free of side effects.
+
+```vue
+<Sortable
+  v-model="doing"
+  item-key="id"
+  group="board"
+  movement="free"
+  :can-drop="({ items }) => items.length < 3 || 'Doing takes 3 cards at most'"
+  v-slot="{ entries, listAttrs, getItemAttrs, getPlaceholderAttrs, dropTarget }"
+>
+  <div v-bind="listAttrs">
+    <template v-for="entry in entries" :key="entry.key">
+      <div
+        v-if="entry.type === 'placeholder'"
+        v-show="dropTarget?.allowed !== false"
+        v-bind="getPlaceholderAttrs(entry).attrs"
+        :style="getPlaceholderAttrs(entry).style"
+      />
+      <div v-else v-bind="getItemAttrs(entry).attrs">{{ entry.element.label }}</div>
+    </template>
+  </div>
+  <p v-if="dropTarget?.reason">{{ dropTarget.reason }}</p>
+</Sortable>
+```
+
+While a free drag is under way, every enabled list of its group, the item's own included, has:
+
+- the `dropTarget` slot prop, `{ over, allowed, reason? }`, and `null` at any other time;
+- `data-vuesortable-drop-target` on its root: `idle`, `over`, or `refused`.
+
+The dragging side gets the same verdict: `overlay.allowed` and `overlay.reason`, and `reason` in the `drag-move` and `drag-cancel` payloads. A refused list still has the placeholder in its `entries`; hide it if a refusal should open no gap, as above.
+
+### Dropping outside
+
+`remove-on-drop-outside` removes an item released over no list. It implies free movement. While the pointer is outside, the item's gap closes; on release the list emits `update:modelValue` without the item, then `remove`, then `drag-end`.
+
+```vue
+<Sortable v-model="tags" item-key="id" remove-on-drop-outside @remove="onRemove" />
+```
+
+`canMove` is asked first, with `outside: true` in its payload, and can keep the item. Style the overlay from `overlay.outside` to say what a release will do.
+
+### SortableSource
+
+`SortableSource` makes any element a drag source for something that is not an item of a list: a block in a palette, a field in a sidebar. It renders nothing of its own.
+
+```vue
+<script setup lang="ts">
+import { ref } from 'vue'
+import { Sortable, SortableSource } from '@guillemservera/vue-sortable'
+import type { SortableReceivePayload } from '@guillemservera/vue-sortable'
+
+type Block = { kind: string, label: string }
+type Placed = Block & { id: string }
+
+const palette: Block[] = [{ kind: 'text', label: 'Text' }, { kind: 'image', label: 'Image' }]
+const page = ref<Placed[]>([])
+
+function place({ data, items, to }: SortableReceivePayload<Placed>) {
+  const next = [...items]
+  next.splice(to, 0, { ...(data as Block), id: crypto.randomUUID() })
+  page.value = next
+}
+</script>
+
+<template>
+  <SortableSource
+    v-for="block in palette"
+    :key="block.kind"
+    :data="block"
+    group="builder"
+    v-slot="{ sourceAttrs, overlay }"
+  >
+    <div v-bind="sourceAttrs">{{ block.label }}</div>
+    <Teleport to="body">
+      <div v-if="overlay" v-bind="overlay.attrs" :style="overlay.style">{{ overlay.element.label }}</div>
+    </Teleport>
+  </SortableSource>
+
+  <Sortable v-model="page" item-key="id" group="builder" @receive="place">
+    <!-- the list, as in the Quick Start -->
+  </Sortable>
+</template>
+```
+
+| Prop | Type | Default |
+| --- | --- | --- |
+| `data` | `D` | required |
+| `group` | `string \| { name: string }` | required |
+| `disabled` | `boolean` | `false` |
+| `activation` | `{ threshold?: number, delay?: number, delayOnTouchOnly?: boolean }` | `{ threshold: 4 }` |
+| `motion` | `false \| SortableMotion` | snap drop motion |
+
+- The source always moves freely, is never a target, and stays where it is. The lists of its `group` take it whatever their own `movement`.
+- The list under the pointer shows a placeholder, and on drop emits `receive`. No model is changed for you: the list makes an item of `data` and inserts it at `to`.
+- `canReceive` on the list refuses a source as `canDrop` refuses an item. Released over no list, or refused, the drag is cancelled and the overlay returns to the source.
+- The slot gives `sourceAttrs` for the element that is pressed (the pointer handler, `data-vuesortable-source`, `data-vuesortable-dragging`, and `touch-action: none`), `dragging`, and `overlay`, as a list's.
+- It emits `drag-start`, `drag-move`, `drag-end`, and `drag-cancel` with a list's payloads, where `item` is `data`. `toList` and `to` are the list under the pointer, unless `outside` is set.
+- A press that does not become a drag is still a click; the click that would end a drag is swallowed.
+
 ### Default Slot
 
 The default slot is the rendering contract. Bind the provided attrs to your list, item, handle, placeholder, and overlay elements.
@@ -257,7 +396,8 @@ The default slot is the rendering contract. Bind the provided attrs to your list
 | `getItemAttrs(entry)` | Attributes for an item entry. |
 | `getHandleAttrs(entry)` | Attributes for a drag handle. |
 | `getPlaceholderAttrs(entry)` | Attributes and structural style for the placeholder. |
-| `overlay` | Overlay render state, or `null`. |
+| `overlay` | Overlay render state, or `null`. With free movement it also says `outside`, `allowed`, and `reason`. |
+| `dropTarget` | `{ over, allowed, reason? }` while a free drag could be dropped on this list, else `null`. |
 
 The old `item`, `overlay`, and `placeholder` named slots are not part of the `0.1.0` contract.
 
@@ -269,6 +409,8 @@ VueSortable returns accessibility attrs as part of the headless contract:
 - `getItemAttrs(entry).attrs` includes item semantics, position metadata, disabled state, and pointer handlers.
 - `getHandleAttrs(entry)` includes handle semantics, keyboard shortcuts, disabled state, focusability, and keyboard reorder handlers.
 - A hidden live region announces keyboard moves and blocked keyboard moves.
+
+Keyboard reordering works inside one list. Moving an item to another list, dragging a `SortableSource`, and removing by a drop outside are pointer-only: where "the next list" is has no general answer for lists laid out freely, and a source has no position to move from. Dragging must not be the only way to do any of them (WCAG 2.5.7): offer a button or a menu for the same change, and apply it to your models with `moveItem` or plain array code.
 
 You can override accessible names by binding `getHandleAttrs(entry)` first and then providing your own `aria-label` on the handle.
 
@@ -337,6 +479,8 @@ VueSortable takes a different approach: it is a Vue-native primitive with local 
 ## Limitations
 
 - No nested lists yet.
+- No keyboard path between lists, for sources, or for removal: provide your own control.
+- No scrolling while dragging near an edge.
 - No virtualized lists yet.
 - No multi-select reorder yet.
 - `flow` is not a SortableJS-style freeform/grid replacement.
@@ -368,7 +512,7 @@ pnpm test:nuxt
 
 ## Examples
 
-Copyable examples are available in `examples/`.
+Copyable examples are available in `examples/`, among them a kanban board with free movement, a column limit, and removal on a drop outside (`kanban.vue`), and a palette of blocks dragged onto a toolbar and a page (`palette.vue`).
 
 ## License
 
