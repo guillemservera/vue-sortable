@@ -66,6 +66,8 @@ type DragState<T> = OverlayState<T> & {
   /** Free drags only: what the list under the pointer answered, and the reason it gave when it refused. */
   allowed: boolean
   reason: string | undefined
+  /** Free drags only: the pointer is over a disabled list, which takes nothing and is not outside either. */
+  blocked: boolean
   delayPassed: boolean
   direction: -1 | 0 | 1
   from: number
@@ -78,6 +80,8 @@ type DragState<T> = OverlayState<T> & {
   layout: LayoutSnapshot<T>
   /** Free drags only: the pointer is over no list that could take the item. */
   outside: boolean
+  /** The pointer that began the drag: no other pointer moves or ends it. */
+  pointerId: number | undefined
   pointerOffsetX: number
   pointerOffsetY: number
   previewIndex: number
@@ -191,6 +195,8 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
   let shouldRefreshLayout = false
   let restoreDocumentCursor: (() => void) | null = null
 
+  // The lists this drag showed a placeholder or a verdict in, cleared by reference: one may change group mid-drag.
+  const previewedEntries = new Set<SortableGroupEntry<T>>()
   const listMotionRects = new Map<string, MotionRect>()
   const listMotionElements = new Set<HTMLElement>()
   const listMotionAnimations = new Map<HTMLElement, Animation>()
@@ -367,6 +373,7 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
 
     dragState.value = {
       allowed: true,
+      blocked: false,
       delayPassed: !shouldDelayActivation(event),
       direction: 0,
       element: entry.element,
@@ -384,6 +391,7 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
       layout,
       left,
       outside: false,
+      pointerId: event.pointerId,
       pointerOffsetX: event.clientX - itemRect.left,
       pointerOffsetY: event.clientY - itemRect.top,
       previewIndex: entry.index,
@@ -414,6 +422,7 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
     document.addEventListener('pointermove', handlePointerMove)
     document.addEventListener('pointerup', handlePointerUp)
     document.addEventListener('pointercancel', handlePointerCancel)
+    document.addEventListener('lostpointercapture', handleLostPointerCapture)
     event.preventDefault()
   }
 
@@ -440,7 +449,14 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
 
   function handlePointerMove(event: PointerEvent) {
     const state = dragState.value
-    if (!state) return
+    if (!state || event.pointerId !== state.pointerId) return
+
+    // A mouse with no button down: the release was never heard (it happened out of the window). Nothing is
+    // dropped. Touch and pen are left alone: they do not move without contact, and always end with an event.
+    if (state.free && event.pointerType === 'mouse' && event.buttons === 0) {
+      cleanupDrag(true)
+      return
+    }
 
     if (!state.delayPassed) {
       event.preventDefault()
@@ -472,7 +488,7 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
       return
     }
 
-    if (previewIndex !== state.previewIndex || target.entry.id !== state.previewList || target.outside !== state.outside) {
+    if (!isSameTarget(state, target)) {
       const nextState = retarget(state, target, event, direction)
       requestListMotion(
         target.entry.id === state.previewList && target.outside === state.outside
@@ -518,7 +534,8 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
   ): DragState<T> {
     const next: DragState<T> = {
       ...state,
-      allowed: true,
+      allowed: !target.blocked,
+      blocked: target.blocked,
       direction,
       index: target.previewIndex,
       lastClientX: event.clientX,
@@ -539,6 +556,13 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
       if (typeof verdict === 'string') next.reason = verdict
     }
     return next
+  }
+
+  function isSameTarget(state: DragState<T>, target: ReturnType<typeof resolveDragTarget>) {
+    return target.previewIndex === state.previewIndex
+      && target.entry.id === state.previewList
+      && target.outside === state.outside
+      && target.blocked === state.blocked
   }
 
   function judgeTarget(state: DragState<T>, targetEntry: SortableGroupEntry<T>): unknown {
@@ -577,10 +601,11 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
     const candidates = new Set<SortableGroupEntry<T>>(state.group ? getGroupedSortableEntries<T>(state.group) : [])
     if (!external) candidates.add(groupEntry)
     for (const entry of candidates) {
+      previewedEntries.add(entry)
       entry.setDropTarget(
         entry.props.disabled
           ? null
-          : entry.id === state.previewList && !state.outside
+          : entry.id === state.previewList && !state.outside && !state.blocked
             ? { allowed: state.allowed, over: true, reason: state.reason }
             : IDLE_DROP_TARGET,
       )
@@ -603,7 +628,7 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
 
   function handlePointerUp(event: PointerEvent) {
     let state = dragState.value
-    if (!state) return
+    if (!state || event.pointerId !== state.pointerId) return
 
     clearActivationDelay()
 
@@ -628,7 +653,7 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
     }
 
     const payload = payloadFromState(state)
-    const allowed = props.canMove?.(guardPayload(payload, props.modelValue)) ?? true
+    const allowed = !state.blocked && (props.canMove?.(guardPayload(payload, props.modelValue)) ?? true)
     const moved = payload.from !== payload.to
     const finalEntries = allowed && moved ? buildFinalEntries(state) : entries.value
     const targetPosition = allowed
@@ -648,7 +673,7 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
     emit.dragEnd(payload)
     clearPointerListeners()
     restoreDocumentDragCursor()
-    clearGroupPreview(state)
+    clearGroupPreview()
     dragState.value = null
 
     startDropAnimation({
@@ -670,9 +695,7 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
 
   function resolveFinalDragState(event: PointerEvent, state: DragState<T>) {
     const target = resolveDragTarget(event, state, state.direction)
-    if (target.previewIndex === state.previewIndex && target.entry.id === state.previewList && target.outside === state.outside) {
-      return state
-    }
+    if (isSameTarget(state, target)) return state
 
     const nextState = retarget(state, target, event, state.direction)
     updateGroupPreview(state, nextState, target.entry, target.previewIndex)
@@ -707,7 +730,7 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
       targetEntry.requestListMotion()
     }
 
-    clearGroupPreview(state)
+    clearGroupPreview()
 
     if (allowed && active && external) {
       // What a source holds is not an item of the list: the list is told, and makes one of it.
@@ -746,12 +769,13 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
   }
 
   /**
-   * A free drag released over no list. The item is removed when the list asks for that and `canMove` lets it go;
-   * otherwise nothing moves, and the overlay returns to where the item was.
+   * A free drag released over no list of its group. The item is removed when the list asks for that, is still
+   * enabled, and `canMove` lets it go; otherwise nothing moves, and the overlay returns to where the item was.
    */
   function finishOutsideDrag(state: DragState<T>) {
     const payload = payloadFromState(state)
     const removed = props.removeOnDropOutside === true
+      && !props.disabled
       && Boolean(props.canMove?.(guardPayload(payload, props.modelValue)) ?? true)
 
     if (removed) {
@@ -765,7 +789,7 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
     emit.dragEnd(payload)
     clearPointerListeners()
     restoreDocumentDragCursor()
-    clearGroupPreview(state)
+    clearGroupPreview()
     dragState.value = null
     if (removed) return
 
@@ -786,8 +810,15 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
     }, originalTargetPosition(state))
   }
 
-  function handlePointerCancel() {
+  function handlePointerCancel(event: PointerEvent) {
+    if (event.pointerId !== dragState.value?.pointerId) return
     cleanupDrag(true)
+  }
+
+  // A free drag that loses the capture it took has lost its pointer: it ends there, and nothing is dropped.
+  function handleLostPointerCapture(event: PointerEvent) {
+    const state = dragState.value
+    if (state?.free && event.pointerId === state.pointerId && event.target === getRootElement()) cleanupDrag(true)
   }
 
   function handleKeyboardMove(event: KeyboardEvent, entry: SortableItemEntry<T>) {
@@ -859,12 +890,15 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
 
   function resolveDragTarget(event: PointerEvent, state: DragState<T>, direction: -1 | 0 | 1) {
     const hit = getGroupedTargetEntry(event, state)
-    if (state.free && !hit) {
-      // Over no list: the placeholder goes back to where the item came from.
+    // A disabled list takes nothing, but the pointer over it is not outside: a release there must not remove.
+    const blocked = state.free && hit?.props.disabled === true
+    if (state.free && (!hit || blocked)) {
+      // Over no list that takes it: the placeholder goes back to where the item came from.
       return {
+        blocked,
         collisionPoint: state.lastCollisionPoint,
         entry: groupEntry,
-        outside: true,
+        outside: !blocked,
         previewIndex: state.from,
         sourcePosition: resolveOverlayPosition(event, state),
       }
@@ -920,6 +954,7 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
       : targetPosition.y + state.height / 2
 
     return {
+      blocked: false,
       collisionPoint,
       entry: targetEntry,
       outside: false,
@@ -1010,7 +1045,7 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
 
   /**
    * The target of a free drag: the list under the pointer, whatever its orientation or layout, and the innermost
-   * one when their boxes overlap. Null over none.
+   * one when their boxes overlap. A disabled list is returned too, for the caller to refuse. Null over none.
    */
   function findFreeTarget(event: PointerEvent, group: string | null): SortableGroupEntry<T> | null {
     // shortcut: boxes are compared, so a list clipped by a scroll container still takes the pointer over its
@@ -1022,7 +1057,7 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
     let targetArea = Infinity
     for (const entry of candidates) {
       const root = entry.root()
-      if (entry.props.disabled || !root?.isConnected) continue
+      if (!root?.isConnected) continue
 
       const rect = root.getBoundingClientRect()
       if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) continue
@@ -1052,6 +1087,7 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
     }
 
     targetEntry.requestListMotion()
+    previewedEntries.add(targetEntry)
     targetEntry.setExternalDrag({
       activeKey: nextState.key,
       height: nextState.height,
@@ -1176,15 +1212,14 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
     return next
   }
 
-  function clearGroupPreview(state: DragState<T>) {
+  function clearGroupPreview() {
     dropTargetState.value = null
-    if (!state.group) return
 
-    for (const entry of groupedSortables.get(state.group) ?? []) {
+    for (const entry of previewedEntries) {
       entry.setDropTarget(null)
-      if (entry.id === listId) continue
-      entry.clearExternalDrag()
+      if (entry !== groupEntry) entry.clearExternalDrag()
     }
+    previewedEntries.clear()
   }
 
   function readPlaceholderPosition(activeKey: string): OverlayPosition | null {
@@ -1514,6 +1549,7 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
     document.removeEventListener('pointermove', handlePointerMove)
     document.removeEventListener('pointerup', handlePointerUp)
     document.removeEventListener('pointercancel', handlePointerCancel)
+    document.removeEventListener('lostpointercapture', handleLostPointerCapture)
   }
 
   function cleanupDrag(emitCancel: boolean) {
@@ -1522,7 +1558,7 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
     clearPointerListeners()
     restoreDocumentDragCursor()
     cancelListMotionFrame()
-    if (state) clearGroupPreview(state)
+    if (state) clearGroupPreview()
     dragState.value = null
 
     if (emitCancel && state?.started) {
@@ -1670,16 +1706,19 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
 
     const drag = dragState.value
     const outside = drag?.outside === true
+    const attrs: SortableOverlayRenderState<T>['attrs'] = {
+      [DATA_ATTRIBUTES.overlay]: '',
+      [DATA_ATTRIBUTES.overlayKey]: overlay.key,
+      'aria-hidden': 'true',
+      'data-vuesortable-dragging': isSorting.value ? 'true' : 'false',
+      'data-vuesortable-dropping': dropState.value?.dropping ? 'true' : 'false',
+    }
+    // Only a free drag can be outside: an axis overlay keeps the attributes it always had.
+    if (overlay.free) attrs['data-vuesortable-outside'] = outside ? 'true' : 'false'
+
     return {
       allowed: drag?.allowed !== false,
-      attrs: {
-        [DATA_ATTRIBUTES.overlay]: '',
-        [DATA_ATTRIBUTES.overlayKey]: overlay.key,
-        'aria-hidden': 'true',
-        'data-vuesortable-dragging': isSorting.value ? 'true' : 'false',
-        'data-vuesortable-dropping': dropState.value?.dropping ? 'true' : 'false',
-        'data-vuesortable-outside': outside ? 'true' : 'false',
-      },
+      attrs,
       dragging: isDragging.value,
       element: overlay.element,
       index: overlay.index,

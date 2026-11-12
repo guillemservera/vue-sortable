@@ -173,15 +173,43 @@ describe('free movement', () => {
     expect(a.emitted('drag-end')).toHaveLength(1)
   })
 
-  it('treats a disabled list as no list', async () => {
-    const a = mountList(items('a1'), { geometry: columnA, props: { ...free, listId: 'a' } })
+  it('takes nothing into a disabled list, which is not outside either', async () => {
+    const a = mountList(items('a1', 'a2'), { geometry: columnA, props: { ...free, listId: 'a' } })
     const b = mountList(items('b1'), { geometry: columnB, props: { ...free, disabled: true, listId: 'b' } })
 
     await press(itemOf(a, 'a1'), 20, 10)
     await dragTo(320, 10)
 
+    expect(orderOf(a)).toEqual(['(a1)', 'a2'])
     expect(orderOf(b)).toEqual(['b1'])
-    expect(a.emitted('drag-move')?.at(-1)?.[0]).toMatchObject({ outside: true })
+    expect(a.get('[data-vuesortable-overlay]').attributes('data-vuesortable-outside')).toBe('false')
+    expect(a.get('[data-vuesortable-root]').attributes('data-vuesortable-drop-target')).toBe('idle')
+    expect(b.get('[data-vuesortable-root]').attributes('data-vuesortable-drop-target')).toBeUndefined()
+    expect(a.emitted('drag-move')?.at(-1)?.[0]).not.toHaveProperty('outside')
+
+    await release(320, 10)
+
+    expect(a.props('modelValue')).toEqual(items('a1', 'a2'))
+    expect(b.props('modelValue')).toEqual(items('b1'))
+    expect(a.emitted('drag-cancel')).toHaveLength(1)
+    expect(a.emitted('drag-cancel')?.[0]?.[0]).not.toHaveProperty('outside')
+    expect(a.emitted('drag-end')).toHaveLength(1)
+  })
+
+  it('clears a list that left the group while it showed the placeholder', async () => {
+    const a = mountList(items('a1'), { geometry: columnA, props: { ...free, listId: 'a' } })
+    const b = mountList(items('b1'), { geometry: columnB, props: { ...free, listId: 'b' } })
+
+    await press(itemOf(a, 'a1'), 20, 10)
+    await dragTo(320, 10)
+    expect(orderOf(b)).toEqual(['(a1)', 'b1'])
+
+    await b.setProps({ group: 'elsewhere' })
+    document.dispatchEvent(new MouseEvent('pointercancel', { bubbles: true }))
+    await nextTick()
+
+    expect(orderOf(b)).toEqual(['b1'])
+    expect(b.get('[data-vuesortable-root]').attributes('data-vuesortable-drop-target')).toBeUndefined()
   })
 
   it('lands the overlay on the placeholder of the other list, in viewport coordinates', async () => {
@@ -214,7 +242,7 @@ describe('free movement', () => {
     await press(itemOf(list, 'a1'), 20, 10)
     await dragTo(30, 20)
     // Position-only moves write the transform without a render.
-    document.dispatchEvent(new MouseEvent('pointermove', { bubbles: true, clientX: 90, clientY: 22 }))
+    document.dispatchEvent(new MouseEvent('pointermove', { bubbles: true, buttons: 1, clientX: 90, clientY: 22 }))
 
     expect((list.get('[data-vuesortable-overlay]').element as HTMLElement).style.transform).toBe('translate3d(70px, 12px, 0)')
   })
@@ -230,7 +258,15 @@ describe('axis movement stays as it was', () => {
 
     expect(orderOf(r)).toEqual(['r1'])
     expect(overlayStyle(a)).toContain('position: absolute')
-    expect(a.get('[data-vuesortable-overlay]').attributes('data-vuesortable-outside')).toBe('false')
+    // The overlay element of an axis drag carries what it carried in 0.2.0, and nothing more.
+    expect(a.get('[data-vuesortable-overlay]').element.getAttributeNames().sort()).toEqual([
+      'aria-hidden',
+      'data-vuesortable-dragging',
+      'data-vuesortable-dropping',
+      'data-vuesortable-overlay',
+      'data-vuesortable-overlay-key',
+      'style',
+    ])
 
     await release(120, 420)
     expect(r.props('modelValue')).toEqual(items('r1'))

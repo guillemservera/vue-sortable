@@ -201,6 +201,24 @@ describe('SortableSource', () => {
     expect(board.seen.slot?.dropTarget).toBeNull()
   })
 
+  it('gives a disabled list nothing, and is not outside over it', async () => {
+    const board = mountBoard(items('b1'), { props: { disabled: true } })
+    const source = mountSource()
+
+    await press(source.block, 20, 10)
+    await dragTo(320, 10)
+
+    expect(orderOf(board.wrapper)).toEqual(['b1'])
+    expect(source.seen.slot?.overlay).toMatchObject({ allowed: false, outside: false })
+
+    await release(320, 10)
+
+    expect(board.wrapper.emitted('receive')).toBeUndefined()
+    expect(source.wrapper.emitted('drag-cancel')).toHaveLength(1)
+    expect(source.wrapper.emitted('drag-end')).toHaveLength(1)
+    expect(source.seen.slot?.overlay).toBeNull()
+  })
+
   it('returns the overlay to the source when the drop is cancelled', async () => {
     vi.useFakeTimers()
     mountBoard(items('b1'))

@@ -90,6 +90,107 @@ describe('removeOnDropOutside', () => {
     expect(list.emitted('drag-cancel')?.[0]?.[0]).toMatchObject({ key: 'a1', outside: true })
   })
 
+  it('cancels, and removes nothing, when released over a disabled list of the group', async () => {
+    const a = mountList(items('a1', 'a2'), { geometry: columnA, props: { group: 'board', listId: 'a', removeOnDropOutside: true } })
+    const b = mountList(items('b1'), { geometry: columnB, props: { disabled: true, group: 'board', listId: 'b' } })
+
+    await press(itemOf(a, 'a1'), 20, 10)
+    await dragTo(320, 10)
+
+    // Not outside: the gap stays open where the item was, and the overlay does not announce a removal.
+    expect(orderOf(a)).toEqual(['(a1)', 'a2'])
+    expect(a.get('[data-vuesortable-overlay]').attributes('data-vuesortable-outside')).toBe('false')
+
+    await release(320, 10)
+
+    expect(a.props('modelValue')).toEqual(items('a1', 'a2'))
+    expect(b.props('modelValue')).toEqual(items('b1'))
+    expect(a.emitted('update:modelValue')).toBeUndefined()
+    expect(a.emitted('remove')).toBeUndefined()
+    expect(a.emitted('drag-cancel')).toHaveLength(1)
+  })
+
+  it('cancels, and removes nothing, when its own list is disabled mid-drag and the release is over it', async () => {
+    const list = mountList(items('a1', 'a2'), { geometry: columnA, props: { removeOnDropOutside: true } })
+
+    await press(itemOf(list, 'a1'), 20, 10)
+    await dragTo(20, 120)
+    await list.setProps({ disabled: true })
+    await release(20, 120)
+
+    expect(list.props('modelValue')).toEqual(items('a1', 'a2'))
+    expect(list.emitted('update:modelValue')).toBeUndefined()
+    expect(list.emitted('remove')).toBeUndefined()
+    expect(list.emitted('reorder')).toBeUndefined()
+    expect(list.emitted('drag-cancel')).toHaveLength(1)
+  })
+
+  it('keeps the item when its own list is disabled mid-drag and the release is outside', async () => {
+    const list = mountList(items('a1', 'a2'), { geometry: columnA, props: { removeOnDropOutside: true } })
+
+    await press(itemOf(list, 'a1'), 20, 10)
+    await dragTo(250, 10)
+    await list.setProps({ disabled: true })
+    await release(250, 10)
+
+    expect(list.props('modelValue')).toEqual(items('a1', 'a2'))
+    expect(list.emitted('remove')).toBeUndefined()
+  })
+
+  it('is neither ended nor removed by the release of another pointer', async () => {
+    const list = mountList(items('a1', 'a2'), { geometry: columnA, props: { removeOnDropOutside: true } })
+
+    await press(itemOf(list, 'a1'), 20, 10, { pointerId: 1 })
+    await dragTo(30, 20, { pointerId: 1 })
+
+    // A second finger taps away from the list while the first still holds the item over it.
+    await dragTo(250, 10, { pointerId: 2 })
+    await release(250, 10, { pointerId: 2 })
+    document.dispatchEvent(Object.assign(new MouseEvent('pointercancel', { bubbles: true }), { pointerId: 2 }))
+    await nextTick()
+
+    expect(list.props('modelValue')).toEqual(items('a1', 'a2'))
+    expect(list.emitted('remove')).toBeUndefined()
+    expect(list.emitted('drag-end')).toBeUndefined()
+    expect(list.emitted('drag-cancel')).toBeUndefined()
+    expect(orderOf(list)).toEqual(['(a1)', 'a2'])
+
+    await release(30, 20, { pointerId: 1 })
+    expect(list.emitted('drag-end')).toHaveLength(1)
+    expect(list.props('modelValue')).toEqual(items('a1', 'a2'))
+  })
+
+  it('cancels, and removes nothing, when the pointer is found released without a pointerup', async () => {
+    const list = mountList(items('a1', 'a2'), { geometry: columnA, props: { removeOnDropOutside: true } })
+
+    await press(itemOf(list, 'a1'), 20, 10)
+    await dragTo(250, 10)
+    // The mouse button went up out of the window: the next move comes with none held.
+    await dragTo(260, 10, { buttons: 0, pointerType: 'mouse' })
+
+    expect(list.emitted('drag-cancel')).toHaveLength(1)
+    expect(orderOf(list)).toEqual(['a1', 'a2'])
+
+    await release(260, 10)
+    expect(list.props('modelValue')).toEqual(items('a1', 'a2'))
+    expect(list.emitted('remove')).toBeUndefined()
+  })
+
+  it('cancels, and removes nothing, when the list loses the pointer capture', async () => {
+    const list = mountList(items('a1', 'a2'), { geometry: columnA, props: { removeOnDropOutside: true } })
+
+    await press(itemOf(list, 'a1'), 20, 10)
+    await dragTo(250, 10)
+    list.get('[data-vuesortable-root]').element.dispatchEvent(new Event('lostpointercapture', { bubbles: true }))
+    await nextTick()
+
+    expect(list.emitted('drag-cancel')).toHaveLength(1)
+
+    await release(250, 10)
+    expect(list.props('modelValue')).toEqual(items('a1', 'a2'))
+    expect(list.emitted('remove')).toBeUndefined()
+  })
+
   it('removes nothing when the drag is cancelled outside', async () => {
     const list = mountList(items('a1', 'a2'), { geometry: columnA, props: { removeOnDropOutside: true } })
 

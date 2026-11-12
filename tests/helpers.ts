@@ -90,22 +90,30 @@ export function placeBox(element: Element, box: Box) {
   boxes.set(element, box)
 }
 
-function pointerEvent(type: string, clientX: number, clientY: number) {
-  return new MouseEvent(type, { bubbles: true, button: 0, cancelable: true, clientX, clientY })
+/** What a test says of the pointer beyond where it is: which pointer, and which buttons it holds. */
+export type PointerInit = MouseEventInit & { pointerId?: number, pointerType?: string }
+
+// The primary button is held (`buttons: 1`), as it is while a real drag is under way.
+function pointerEvent(type: string, clientX: number, clientY: number, init: PointerInit = {}) {
+  const event = new MouseEvent(type, { bubbles: true, button: 0, buttons: 1, cancelable: true, clientX, clientY, ...init })
+  // jsdom has no PointerEvent: what a test says of the pointer is put on the mouse event.
+  if (init.pointerId !== undefined) Object.defineProperty(event, 'pointerId', { value: init.pointerId })
+  if (init.pointerType !== undefined) Object.defineProperty(event, 'pointerType', { value: init.pointerType })
+  return event
 }
 
-export async function press(element: Element, clientX: number, clientY: number) {
-  element.dispatchEvent(pointerEvent('pointerdown', clientX, clientY))
+export async function press(element: Element, clientX: number, clientY: number, init?: PointerInit) {
+  element.dispatchEvent(pointerEvent('pointerdown', clientX, clientY, init))
   await nextTick()
 }
 
-export async function dragTo(clientX: number, clientY: number) {
-  document.dispatchEvent(pointerEvent('pointermove', clientX, clientY))
+export async function dragTo(clientX: number, clientY: number, init?: PointerInit) {
+  document.dispatchEvent(pointerEvent('pointermove', clientX, clientY, init))
   await nextTick()
 }
 
-export async function release(clientX: number, clientY: number) {
-  document.dispatchEvent(pointerEvent('pointerup', clientX, clientY))
+export async function release(clientX: number, clientY: number, init?: PointerInit) {
+  document.dispatchEvent(pointerEvent('pointerup', clientX, clientY, init))
   await nextTick()
 }
 
