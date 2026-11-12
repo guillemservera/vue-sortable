@@ -8,6 +8,7 @@ import {
   SELECTORS,
 } from '../constants'
 import type {
+  SortableCanMovePayload,
   SortableCollision,
   SortableDefaultSlotProps,
   SortableDragPayload,
@@ -419,19 +420,7 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
     const previewIndex = target.previewIndex
 
     if (!state.started) {
-      const nextState = {
-        ...state,
-        direction,
-        index: previewIndex,
-        lastClientX: event.clientX,
-        lastClientY: event.clientY,
-        lastCollisionPoint: target.collisionPoint,
-        left: position.left,
-        previewIndex,
-        previewList: target.entry.id,
-        started: true,
-        y: position.y,
-      }
+      const nextState = retarget(state, target, event, direction)
       requestListMotion()
       updateGroupPreview(state, nextState, target.entry, previewIndex)
       dragState.value = nextState
@@ -443,18 +432,7 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
     }
 
     if (previewIndex !== state.previewIndex || target.entry.id !== state.previewList) {
-      const nextState = {
-        ...state,
-        direction,
-        index: previewIndex,
-        lastClientX: event.clientX,
-        lastClientY: event.clientY,
-        lastCollisionPoint: target.collisionPoint,
-        left: position.left,
-        previewIndex,
-        previewList: target.entry.id,
-        y: position.y,
-      }
+      const nextState = retarget(state, target, event, direction)
       requestListMotion(
         target.entry.id === state.previewList
           ? { from: state.previewIndex, to: previewIndex }
@@ -489,6 +467,28 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
     event.preventDefault()
   }
 
+  /** The drag state once the pointer has resolved to `target`. */
+  function retarget(
+    state: DragState<T>,
+    target: ReturnType<typeof resolveDragTarget>,
+    event: PointerEvent,
+    direction: -1 | 0 | 1,
+  ): DragState<T> {
+    return {
+      ...state,
+      direction,
+      index: target.previewIndex,
+      lastClientX: event.clientX,
+      lastClientY: event.clientY,
+      lastCollisionPoint: target.collisionPoint,
+      left: target.sourcePosition.left,
+      previewIndex: target.previewIndex,
+      previewList: target.entry.id,
+      started: true,
+      y: target.sourcePosition.y,
+    }
+  }
+
   function applyOverlayTransform(left: number, y: number) {
     if (!canUseDOM()) return
     const root = getRootElement()
@@ -518,16 +518,7 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
     }
 
     const payload = payloadFromState(state)
-    const allowed = props.canMove?.({
-      from: payload.from,
-      fromList: payload.fromList,
-      group: payload.group,
-      item: payload.item,
-      items: [...props.modelValue],
-      key: payload.key,
-      to: payload.to,
-      toList: payload.toList,
-    }) ?? true
+    const allowed = props.canMove?.(guardPayload(payload, props.modelValue)) ?? true
     const moved = payload.from !== payload.to
     const finalEntries = allowed && moved ? buildFinalEntries(state) : entries.value
     const targetPosition = allowed
@@ -572,17 +563,7 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
       return state
     }
 
-    const nextState = {
-      ...state,
-      index: target.previewIndex,
-      lastClientX: event.clientX,
-      lastClientY: event.clientY,
-      lastCollisionPoint: target.collisionPoint,
-      left: target.sourcePosition.left,
-      previewIndex: target.previewIndex,
-      previewList: target.entry.id,
-      y: target.sourcePosition.y,
-    }
+    const nextState = retarget(state, target, event, state.direction)
     updateGroupPreview(state, nextState, target.entry, target.previewIndex)
     dragState.value = nextState
     return nextState
@@ -590,26 +571,8 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
 
   function finishCrossListDrag(state: DragState<T>, targetEntry: SortableGroupEntry<T>) {
     const payload = payloadFromState(state)
-    const sourceAllowed = props.canMove?.({
-      from: payload.from,
-      fromList: payload.fromList,
-      group: payload.group,
-      item: payload.item,
-      items: [...props.modelValue],
-      key: payload.key,
-      to: payload.to,
-      toList: payload.toList,
-    }) ?? true
-    const targetAllowed = targetEntry.props.canDrop?.({
-      from: payload.from,
-      fromList: payload.fromList,
-      group: payload.group,
-      item: payload.item,
-      items: [...targetEntry.props.modelValue],
-      key: payload.key,
-      to: payload.to,
-      toList: payload.toList,
-    }) ?? true
+    const sourceAllowed = props.canMove?.(guardPayload(payload, props.modelValue)) ?? true
+    const targetAllowed = targetEntry.props.canDrop?.(guardPayload(payload, targetEntry.props.modelValue)) ?? true
     const allowed = sourceAllowed && targetAllowed
 
     const sourceEntries = entries.value
@@ -621,7 +584,7 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
     const targetPosition = allowed
       ? convertPositionFromEntry(
           targetEntry,
-          targetEntry.readPlaceholderPosition(state.key) ?? estimateTargetPositionForEntry(targetEntry, state),
+          targetEntry.readPlaceholderPosition(state.key) ?? estimateTargetPosition(state, targetEntry),
         )
       : originalTargetPosition(state)
 
@@ -709,16 +672,7 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
       payload.group = groupName.value
       payload.toList = listId
     }
-    const allowed = props.canMove?.({
-      from: payload.from,
-      fromList: payload.fromList,
-      group: payload.group,
-      item: payload.item,
-      items: [...props.modelValue],
-      key: payload.key,
-      to: payload.to,
-      toList: payload.toList,
-    }) ?? true
+    const allowed = props.canMove?.(guardPayload(payload, props.modelValue)) ?? true
 
     if (!allowed) {
       announcement.value = `Could not move ${getAnnouncementLabel(entry)}.`
@@ -744,7 +698,6 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
   }
 
   function resolveDragTarget(event: PointerEvent, state: DragState<T>, direction: -1 | 0 | 1) {
-    const rawSourcePosition = resolveOverlayPositionRaw(event, state)
     const targetEntry = getGroupedTargetEntry(event, state) ?? groupEntry
     const targetLayout = targetEntry.id === listId
       ? state.layout
@@ -1032,63 +985,20 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
     }
   }
 
-  function estimateTargetPosition(state: DragState<T>): OverlayPosition {
-    const measuredItems = state.layout.items.filter(item => item.key !== state.key)
-    const finalIndex = clamp(state.previewIndex, 0, measuredItems.length)
-
-    if (finalIndex < measuredItems.length) {
-      const targetItem = measuredItems[finalIndex]
-      return {
-        left: targetItem?.left ?? state.left,
-        y: targetItem?.top ?? state.y,
-      }
-    }
+  /** Where the dragged item will rest in `entry`, for when its placeholder is not rendered to be read. */
+  function estimateTargetPosition(state: DragState<T>, entry: SortableGroupEntry<T> = groupEntry): OverlayPosition {
+    const layout = entry === groupEntry ? state.layout : entry.measureLayout()
+    const measuredItems = (layout?.items ?? []).filter(item => item.key !== state.key)
+    const targetItem = measuredItems[clamp(state.previewIndex, 0, measuredItems.length)]
+    if (targetItem) return { left: targetItem.left, y: targetItem.top }
 
     const previousItem = measuredItems[measuredItems.length - 1]
     if (!previousItem) return { left: 0, y: 0 }
 
-    if (orientation.value === 'horizontal') {
-      return {
-        left: previousItem.left + previousItem.width + estimateItemGap(measuredItems, orientation.value),
-        y: previousItem.top,
-      }
-    }
-
-    return {
-      left: previousItem.left,
-      y: previousItem.top + previousItem.height + estimateItemGap(measuredItems, orientation.value),
-    }
-  }
-
-  function estimateTargetPositionForEntry(entry: SortableGroupEntry<T>, state: DragState<T>): OverlayPosition {
-    const layout = entry.measureLayout()
-    if (!layout) return { left: 0, y: 0 }
-
-    const measuredItems = layout.items.filter(item => item.key !== state.key)
-    const finalIndex = clamp(state.previewIndex, 0, measuredItems.length)
-
-    if (finalIndex < measuredItems.length) {
-      const targetItem = measuredItems[finalIndex]
-      return {
-        left: targetItem?.left ?? 0,
-        y: targetItem?.top ?? 0,
-      }
-    }
-
-    const previousItem = measuredItems[measuredItems.length - 1]
-    if (!previousItem) return { left: 0, y: 0 }
-
-    if (entry.orientation() === 'horizontal') {
-      return {
-        left: previousItem.left + previousItem.width + estimateItemGap(measuredItems, entry.orientation()),
-        y: previousItem.top,
-      }
-    }
-
-    return {
-      left: previousItem.left,
-      y: previousItem.top + previousItem.height + estimateItemGap(measuredItems, entry.orientation()),
-    }
+    const gap = estimateItemGap(measuredItems, entry.orientation())
+    return entry.orientation() === 'horizontal'
+      ? { left: previousItem.left + previousItem.width + gap, y: previousItem.top }
+      : { left: previousItem.left, y: previousItem.top + previousItem.height + gap }
   }
 
   function convertPositionFromEntry(entry: SortableGroupEntry<T>, position: OverlayPosition): OverlayPosition {
@@ -1397,6 +1307,20 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
       payload.toList = state.previewList
     }
     return payload
+  }
+
+  /** What `canMove` and `canDrop` are asked: the move, and the model of the list whose hook runs. */
+  function guardPayload(payload: SortableDragPayload<T>, items: readonly T[]): SortableCanMovePayload<T> {
+    return {
+      from: payload.from,
+      fromList: payload.fromList,
+      group: payload.group,
+      item: payload.item,
+      items: [...items],
+      key: payload.key,
+      to: payload.to,
+      toList: payload.toList,
+    }
   }
 
   function movePayloadFromState(state: DragState<T>, event: PointerEvent): SortableMovePayload<T> {
