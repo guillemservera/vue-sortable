@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { Sortable } from '@guillemservera/vue-sortable'
-import type { SortableCanMovePayload, SortableDragPayload } from '@guillemservera/vue-sortable'
+import type { SortableCanMovePayload, SortableDragPayload, SortableMovePayload } from '@guillemservera/vue-sortable'
 
 type Card = {
   id: string
@@ -40,6 +40,23 @@ const columns = ref<Column[]>([
   },
 ])
 const message = ref('Drag a card to another column, or off the board to delete it.')
+const board = ref<HTMLElement | null>(null)
+// True while a release would delete the card: it is over no column, and the pointer has left the board.
+const leaving = ref(false)
+
+function onDragMove(payload: SortableMovePayload<Card>) {
+  const box = board.value?.getBoundingClientRect()
+  const { x, y } = payload.pointer
+  leaving.value = payload.outside === true
+    && box !== undefined
+    && (x < box.left || x > box.right || y < box.top || y > box.bottom)
+}
+
+// The gap between two columns is outside every list too, and a near miss must not delete: a card goes only
+// once it has left the board. `canMove` is asked with `outside: true` before anything is removed.
+function canMove(payload: SortableCanMovePayload<Card>) {
+  return !payload.outside || leaving.value
+}
 
 // Asked while the card hovers: keep it free of side effects.
 function canDropInto(column: Column) {
@@ -56,70 +73,76 @@ function onRemove(payload: SortableDragPayload<Card>) {
 
 <template>
   <div class="example">
-    <div class="columns">
-      <section
+    <div
+      ref="board"
+      class="board"
+    >
+      <!-- The root is the whole column, title included: a card dropped on the title is dropped on the list. -->
+      <Sortable
         v-for="column in columns"
         :key="column.id"
+        v-model="column.cards"
+        as="section"
+        item-key="id"
+        group="kanban"
+        :list-id="column.id"
+        movement="free"
+        remove-on-drop-outside
+        :can-move="canMove"
+        :can-drop="canDropInto(column)"
         class="column"
+        @drag-move="onDragMove"
+        @drag-end="leaving = false"
+        @remove="onRemove"
+        v-slot="{ entries, listAttrs, getItemAttrs, getPlaceholderAttrs, overlay, dropTarget }"
       >
         <h3>{{ column.title }}</h3>
 
-        <Sortable
-          v-model="column.cards"
-          item-key="id"
-          group="kanban"
-          :list-id="column.id"
-          movement="free"
-          remove-on-drop-outside
-          :can-drop="canDropInto(column)"
-          class="lane"
-          @remove="onRemove"
-          v-slot="{ entries, listAttrs, getItemAttrs, getPlaceholderAttrs, overlay, dropTarget }"
+        <div
+          v-bind="listAttrs"
+          class="cards"
         >
-          <div
-            v-bind="listAttrs"
-            class="cards"
+          <template
+            v-for="entry in entries"
+            :key="entry.key"
           >
-            <template
-              v-for="entry in entries"
-              :key="entry.key"
+            <!-- A refused drop opens no gap: the column says why instead. -->
+            <div
+              v-if="entry.type === 'placeholder'"
+              v-show="dropTarget?.allowed !== false"
+              v-bind="getPlaceholderAttrs(entry).attrs"
+              :style="getPlaceholderAttrs(entry).style"
+              class="gap"
+            />
+
+            <div
+              v-else
+              v-bind="getItemAttrs(entry).attrs"
+              class="card"
             >
-              <!-- A refused drop opens no gap: the lane says why instead. -->
-              <div
-                v-if="entry.type === 'placeholder'"
-                v-show="dropTarget?.allowed !== false"
-                v-bind="getPlaceholderAttrs(entry).attrs"
-                :style="getPlaceholderAttrs(entry).style"
-                class="gap"
-              />
+              {{ entry.element.label }}
+            </div>
+          </template>
+        </div>
 
-              <div
-                v-else
-                v-bind="getItemAttrs(entry).attrs"
-                class="card"
-              >
-                {{ entry.element.label }}
-              </div>
-            </template>
-          </div>
+        <p
+          v-if="dropTarget?.reason"
+          class="reason"
+        >
+          {{ dropTarget.reason }}
+        </p>
 
-          <p
-            v-if="dropTarget?.reason"
-            class="reason"
-          >
-            {{ dropTarget.reason }}
-          </p>
-
-          <div
-            v-if="overlay"
-            v-bind="overlay.attrs"
-            :style="overlay.style"
-            class="card lifted"
-          >
-            {{ overlay.outside ? `Delete "${overlay.element.label}"` : overlay.element.label }}
-          </div>
-        </Sortable>
-      </section>
+        <!-- Said from `leaving`, not from `overlay.outside`: it is what a release will really do. -->
+        <div
+          v-if="overlay"
+          v-bind="overlay.attrs"
+          :style="overlay.style"
+          class="card lifted"
+          :class="{ leaving }"
+        >
+          {{ leaving ? `Delete "${overlay.element.label}"` : overlay.element.label }}
+        </div>
+      </Sortable>
     </div>
 
     <p class="message">{{ message }}</p>
@@ -132,17 +155,27 @@ function onRemove(payload: SortableDragPayload<Card>) {
   gap: 14px;
 }
 
-.columns {
+/* The board has an edge to be seen: a card is deleted past it, and nowhere inside it. */
+.board {
   align-items: stretch;
+  background: #f4f6fa;
+  border: 1px solid #d7dde8;
+  border-radius: 12px;
   display: grid;
   gap: 12px;
   grid-template-columns: repeat(3, minmax(0, 1fr));
+  padding: 12px;
 }
 
+/* The root is what a card is dropped on: the whole column, so its title and an empty one take a drop too. */
 .column {
+  align-content: start;
+  border: 1px dashed transparent;
+  border-radius: 10px;
   display: grid;
   gap: 8px;
-  grid-template-rows: auto 1fr;
+  min-height: 200px;
+  padding: 8px;
 }
 
 .column h3 {
@@ -152,25 +185,17 @@ function onRemove(payload: SortableDragPayload<Card>) {
   margin: 0;
 }
 
-/* The root is what a card is dropped on: it fills the column, so an empty lane takes a drop too. */
-.lane {
-  border: 1px dashed transparent;
-  border-radius: 10px;
-  min-height: 180px;
-  padding: 8px;
-}
-
-.lane[data-vuesortable-drop-target] {
+.column[data-vuesortable-drop-target] {
   border-color: #c3cbd9;
 }
 
-.lane[data-vuesortable-drop-target="over"] {
+.column[data-vuesortable-drop-target="over"] {
   background: #e8f0fe;
   border-color: #3b6fd4;
   border-style: solid;
 }
 
-.lane[data-vuesortable-drop-target="refused"] {
+.column[data-vuesortable-drop-target="refused"] {
   background: #fdecec;
   border-color: #c9413f;
 }
@@ -199,7 +224,7 @@ function onRemove(payload: SortableDragPayload<Card>) {
   z-index: 10;
 }
 
-.lifted[data-vuesortable-outside="true"] {
+.lifted.leaving {
   background: #fdecec;
   border-color: #c9413f;
   color: #8f2422;
@@ -208,7 +233,7 @@ function onRemove(payload: SortableDragPayload<Card>) {
 .reason {
   color: #8f2422;
   font-size: 13px;
-  margin: 8px 0 0;
+  margin: 0;
 }
 
 .message {

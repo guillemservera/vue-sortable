@@ -179,6 +179,8 @@ export type * from './types'
 | `canDrop` | `(payload: SortableCanMovePayload<T>) => boolean \| string` | `undefined` |
 | `canReceive` | `(payload: SortableReceivePayload<T>) => boolean \| string` | `undefined` |
 
+`canDrop` and `canReceive` refuse a drop with `false`, or with a string that says why. That holds on every list, whatever its `movement`: in 0.2.0 `canDrop` was typed `boolean` and tested for truthiness, so an untyped hook that returned a non-empty string let the drop through, and now refuses it. See [Drop verdicts](#drop-verdicts).
+
 `class` and `style` are normal Vue attrs and are applied to the root element. They are not typed as props.
 
 `as` controls the outer coordinate container, not the list element. Render your semantic list inside the default slot and bind `listAttrs` to it.
@@ -199,7 +201,10 @@ export type * from './types'
 | `remove` | the `drag-end` payload, with `outside: true` |
 | `receive` | `{ data: unknown, to: number, toList: string, group: string, items: T[] }` |
 
-With free movement the drag payloads also carry `outside: true` while the pointer is over no list, and `reason` when the list under the pointer refused the drop with one. Neither key is present otherwise.
+The drag payloads carry two more keys, each present only when it applies:
+
+- `outside: true`, with free movement only: in every drag event emitted while the pointer is over no list of the item's group, and in `remove`. A disabled list of the group under the pointer is not outside.
+- `reason`, the string a list refused the drop with. With free movement, where the list under the pointer is asked while dragging, it is in the `drag-move` events emitted over that list and in the `drag-cancel` and `drag-end` of a release there. With axis movement, where `canDrop` is asked on release only, it is in that release's `drag-cancel` and `drag-end`.
 
 `reorder` is emitted only when the model changes. `drag-end` is emitted after an active drag ends, even if the item returns to its original position.
 
@@ -273,14 +278,16 @@ What follows from that:
 - The root element is what a list is dropped on. Give it the size of the drop area (a column's whole height, say), and an empty list a size at all.
 - The placeholder and the overlay keep the size the item had where it was picked up. Override the placeholder's `width` or `height` when a list lays its items out differently.
 - A `position: fixed` element is offset by an ancestor with a `transform`, `filter`, or `contain`. Render the overlay in a `<Teleport to="body">` when that applies.
-- Over no list, or over a disabled one, the placeholder returns to where the item was and a release cancels the drag (`drag-cancel`, then `drag-end`, both with `outside: true`). The overlay state has `outside` too, and the overlay element `data-vuesortable-outside`.
+- Over no list of its group, the placeholder returns to where the item was and a release cancels the drag (`drag-cancel`, then `drag-end`, both with `outside: true`). The overlay state has `outside` too, and the overlay element of a free drag `data-vuesortable-outside`.
+- A disabled list of the group takes nothing, and the pointer over it is not outside: the placeholder returns to where the item was, `overlay.allowed` is `false`, and a release cancels the drag. The same holds over the item's own list if it is disabled while the drag is under way.
+- Only the pointer that began a drag moves or ends it; a second finger does neither. A free drag whose pointer is found released without a `pointerup` (a mouse move with no button held, or the pointer capture lost) is cancelled where it is, with `drag-cancel`, and nothing is dropped.
 - Lists clipped by a scroll container are still hit over their hidden part, and nothing scrolls automatically while dragging.
 
 Lists of one group that hold items of different shapes work, but not through `v-model`: bind `:model-value`, and apply the move yourself in `@reorder`, where `fromList`, `toList`, and `to` say what happened.
 
 ### Drop verdicts
 
-`canDrop` (and `canReceive`, for a [source](#sortablesource)) refuses a drop by returning `false`, or a string that says why.
+`canDrop` (and `canReceive`, for a [source](#sortablesource)) refuses a drop by returning `false`, or a string that says why. Any string refuses, on any list; return `true` to accept.
 
 With axis movement the hook runs once, on release. With free movement it also runs while dragging, each time the list or the index under the pointer changes, so the refusal can be shown before the drop. Keep it free of side effects.
 
@@ -313,17 +320,54 @@ While a free drag is under way, every enabled list of its group, the item's own 
 - the `dropTarget` slot prop, `{ over, allowed, reason? }`, and `null` at any other time;
 - `data-vuesortable-drop-target` on its root: `idle`, `over`, or `refused`.
 
-The dragging side gets the same verdict: `overlay.allowed` and `overlay.reason`, and `reason` in the `drag-move` and `drag-cancel` payloads. A refused list still has the placeholder in its `entries`; hide it if a refusal should open no gap, as above.
+The dragging side gets the same verdict: `overlay.allowed` and `overlay.reason`, and `reason` in the `drag-move`, `drag-cancel`, and `drag-end` payloads. A refused list still has the placeholder in its `entries`; hide it if a refusal should open no gap, as above.
 
 ### Dropping outside
 
-`remove-on-drop-outside` removes an item released over no list. It implies free movement. While the pointer is outside, the item's gap closes; on release the list emits `update:modelValue` without the item, then `remove`, then `drag-end`.
+`remove-on-drop-outside` removes an item released over no list of its group. It implies free movement. While the pointer is outside, the item's gap closes; on release the list emits `update:modelValue` without the item, then `remove`, then `drag-end`.
 
 ```vue
 <Sortable v-model="tags" item-key="id" remove-on-drop-outside @remove="onRemove" />
 ```
 
-`canMove` is asked first, with `outside: true` in its payload, and can keep the item. Style the overlay from `overlay.outside` to say what a release will do.
+Only that release removes:
+
+- A disabled list of the group under the pointer is not outside. A release over it cancels the drag and removes nothing, and so does a release over the item's own list if it was disabled while the drag was under way. A list that is disabled by the time of the release removes nothing wherever the pointer is.
+- A drag that ends any other way is cancelled and removes nothing: `pointercancel`, a pointer found released without a `pointerup`, a lost pointer capture. Another pointer's events are ignored.
+- `canMove` is asked first, with `outside: true` in its payload, and can keep the item.
+
+Everything that is not the root of a list of the group is outside, though: a column's title rendered beside the root, the gap between two columns, the page around them. A near miss should not delete, so guard the removal:
+
+- make the root the whole drop area, its header included;
+- let `canMove` allow a removal only where it is meant: once the pointer has left the board, or over a marked remove area. `canMove` is not given the pointer; keep the last one from `drag-move`.
+
+```vue
+<script setup lang="ts">
+const board = ref<HTMLElement | null>(null)
+const leaving = ref(false)
+
+function onDragMove({ outside, pointer }) {
+  const box = board.value!.getBoundingClientRect()
+  leaving.value = outside === true
+    && (pointer.x < box.left || pointer.x > box.right || pointer.y < box.top || pointer.y > box.bottom)
+}
+</script>
+
+<template>
+  <div ref="board">
+    <Sortable
+      v-model="cards"
+      item-key="id"
+      remove-on-drop-outside
+      :can-move="({ outside }) => !outside || leaving"
+      @drag-move="onDragMove"
+      @remove="onRemove"
+    />
+  </div>
+</template>
+```
+
+Say what a release will do from that same state (`leaving` here) rather than from `overlay.outside` alone, which is also true over the parts of the board that are not a list. `examples/kanban.vue` is this pattern in full.
 
 ### SortableSource
 
@@ -378,7 +422,7 @@ function place({ data, items, to }: SortableReceivePayload<Placed>) {
 
 - The source always moves freely, is never a target, and stays where it is. The lists of its `group` take it whatever their own `movement`.
 - The list under the pointer shows a placeholder, and on drop emits `receive`. No model is changed for you: the list makes an item of `data` and inserts it at `to`.
-- `canReceive` on the list refuses a source as `canDrop` refuses an item. Released over no list, or refused, the drag is cancelled and the overlay returns to the source.
+- `canReceive` on the list refuses a source as `canDrop` refuses an item. Released over no list of its group, over a disabled one, or refused, the drag is cancelled and the overlay returns to the source.
 - The slot gives `sourceAttrs` for the element that is pressed (the pointer handler, `data-vuesortable-source`, `data-vuesortable-dragging`, and `touch-action: none`), `dragging`, and `overlay`, as a list's.
 - It emits `drag-start`, `drag-move`, `drag-end`, and `drag-cancel` with a list's payloads, where `item` is `data`. `toList` and `to` are the list under the pointer, unless `outside` is set.
 - A press that does not become a drag is still a click; the click that would end a drag is swallowed.
