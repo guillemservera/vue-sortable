@@ -44,6 +44,8 @@ export type SortableCanMovePayload<T = unknown> = {
   fromList?: string
   toList?: string
   group?: string
+  /** `canMove` is asked whether the item may be removed by a drop outside every list. */
+  outside?: boolean
 }
 
 export type SortableProps<T = unknown> = {
@@ -58,6 +60,8 @@ export type SortableProps<T = unknown> = {
   collision?: SortableCollision
   group?: SortableGroup
   movement?: SortableMovement
+  /** Removes an item released over no list. Implies `movement="free"`. */
+  removeOnDropOutside?: boolean
   overlap?: number
   activation?: SortableActivation
   handle?: string

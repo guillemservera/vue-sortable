@@ -33,6 +33,7 @@ const emit = defineEmits<{
   'drag-start': [payload: SortableDragPayload<T>]
   'drag-move': [payload: SortableMovePayload<T>]
   reorder: [payload: SortableDragPayload<T>]
+  remove: [payload: SortableDragPayload<T>]
   'drag-end': [payload: SortableDragPayload<T>]
   'drag-cancel': [payload: SortableDragPayload<T>]
 }>()
@@ -55,6 +56,7 @@ const sortable = useSortableList<T>({
     dragEnd: payload => emit('drag-end', payload),
     dragMove: payload => emit('drag-move', payload),
     dragStart: payload => emit('drag-start', payload),
+    remove: payload => emit('remove', payload),
     reorder: payload => emit('reorder', payload),
     updateModelValue: value => emit('update:modelValue', value),
   },

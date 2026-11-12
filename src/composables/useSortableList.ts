@@ -100,6 +100,7 @@ type UseSortableListEmits<T> = {
   dragStart: (payload: SortableDragPayload<T>) => void
   dragMove: (payload: SortableMovePayload<T>) => void
   reorder: (payload: SortableDragPayload<T>) => void
+  remove: (payload: SortableDragPayload<T>) => void
   dragEnd: (payload: SortableDragPayload<T>) => void
   dragCancel: (payload: SortableDragPayload<T>) => void
 }
@@ -190,7 +191,7 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
   const layout = computed<SortableLayout>(() => props.layout ?? 'axis')
   const collision = computed<SortableCollision>(() => props.collision ?? 'overlap')
   const groupName = computed(() => normalizeGroupName(props.group))
-  const free = computed(() => props.movement === 'free')
+  const free = computed(() => props.movement === 'free' || props.removeOnDropOutside === true)
   const overlap = computed(() => clamp(props.overlap ?? DEFAULT_OVERLAP, 0, 1))
   const motion = computed(() => normalizeMotion(props.motion))
 
@@ -206,7 +207,8 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
   const layoutEntries = computed<SortableRenderEntry<T>[]>(() => {
     const state = dragState.value
     if (state?.started) {
-      if (state.previewList === listId) {
+      // Outside a list that removes what is dropped there, the gap closes: the item is on its way out.
+      if (state.previewList === listId && !(state.outside && props.removeOnDropOutside)) {
         return buildLayoutEntries(entries.value, state.key, state.previewIndex, state.height, state.width)
       }
 
@@ -704,15 +706,29 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
     }, targetPosition)
   }
 
-  /** A free drag released over no list: nothing moves, and the overlay returns to where the item was. */
+  /**
+   * A free drag released over no list. The item is removed when the list asks for that and `canMove` lets it go;
+   * otherwise nothing moves, and the overlay returns to where the item was.
+   */
   function finishOutsideDrag(state: DragState<T>) {
     const payload = payloadFromState(state)
-    emit.dragCancel(payload)
+    const removed = props.removeOnDropOutside === true
+      && Boolean(props.canMove?.(guardPayload(payload, props.modelValue)) ?? true)
+
+    if (removed) {
+      emit.updateModelValue(entries.value.filter(entry => entry.key !== state.key).map(entry => entry.element))
+      emit.remove(payload)
+    }
+    else {
+      emit.dragCancel(payload)
+    }
+
     emit.dragEnd(payload)
     clearPointerListeners()
     restoreDocumentDragCursor()
     clearGroupPreview(state)
     dragState.value = null
+    if (removed) return
 
     startDropAnimation({
       dropping: false,
@@ -1491,7 +1507,7 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
 
   /** What `canMove` and `canDrop` are asked: the move, and the model of the list whose hook runs. */
   function guardPayload(payload: SortableDragPayload<T>, items: readonly T[]): SortableCanMovePayload<T> {
-    return {
+    const guard: SortableCanMovePayload<T> = {
       from: payload.from,
       fromList: payload.fromList,
       group: payload.group,
@@ -1501,6 +1517,8 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
       to: payload.to,
       toList: payload.toList,
     }
+    if (payload.outside) guard.outside = true
+    return guard
   }
 
   function movePayloadFromState(state: DragState<T>, event: PointerEvent): SortableMovePayload<T> {
