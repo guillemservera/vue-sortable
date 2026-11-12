@@ -24,6 +24,7 @@ import type {
   SortablePlaceholderAttrsResult,
   SortablePlaceholderEntry,
   SortableProps,
+  SortableReceivePayload,
   SortableRenderEntry,
 } from '../types'
 import { canUseDOM, getLayoutRect, isHTMLElement, safeClosest } from '../utils/dom'
@@ -101,6 +102,7 @@ type UseSortableListEmits<T> = {
   dragMove: (payload: SortableMovePayload<T>) => void
   reorder: (payload: SortableDragPayload<T>) => void
   remove: (payload: SortableDragPayload<T>) => void
+  receive: (payload: SortableReceivePayload<T>) => void
   dragEnd: (payload: SortableDragPayload<T>) => void
   dragCancel: (payload: SortableDragPayload<T>) => void
 }
@@ -109,6 +111,11 @@ export type UseSortableListOptions<T> = {
   props: Readonly<SortableProps<T>>
   rootRef: Ref<HTMLElement | null>
   emit: UseSortableListEmits<T>
+  /**
+   * A drag source that is not a list (`SortableSource`): its one item is the pressed element itself, it drags
+   * free, it is never a target, and the list it is dropped on receives it instead of the models changing.
+   */
+  external?: boolean
 }
 
 type ExternalDragState<T> = {
@@ -165,6 +172,7 @@ const LIVE_REGION_STYLE: CSSProperties = {
 
 export function useSortableList<T = unknown>(options: UseSortableListOptions<T>) {
   const { emit, props, rootRef } = options
+  const external = options.external === true
 
   const internalListId = `vuesortable-list-${++sortableListId}`
   const listId = normalizeListId(props.listId) ?? internalListId
@@ -191,7 +199,7 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
   const layout = computed<SortableLayout>(() => props.layout ?? 'axis')
   const collision = computed<SortableCollision>(() => props.collision ?? 'overlap')
   const groupName = computed(() => normalizeGroupName(props.group))
-  const free = computed(() => props.movement === 'free' || props.removeOnDropOutside === true)
+  const free = computed(() => external || props.movement === 'free' || props.removeOnDropOutside === true)
   const overlap = computed(() => clamp(props.overlap ?? DEFAULT_OVERLAP, 0, 1))
   const motion = computed(() => normalizeMotion(props.motion))
 
@@ -329,7 +337,7 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
     if (!force && shouldIgnoreTarget(event.target)) return
 
     const root = getRootElement()
-    const itemElement = getItemElement(entry.key)
+    const itemElement = external ? root : getItemElement(entry.key)
     if (!root || !itemElement) return
 
     const rootRect = root.getBoundingClientRect()
@@ -534,7 +542,32 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
   }
 
   function judgeTarget(state: DragState<T>, targetEntry: SortableGroupEntry<T>): unknown {
-    return targetEntry.props.canDrop?.(guardPayload(payloadFromState(state), targetEntry.props.modelValue)) ?? true
+    return (external
+      ? targetEntry.props.canReceive?.(receivePayload(state, targetEntry))
+      : targetEntry.props.canDrop?.(guardPayload(payloadFromState(state), targetEntry.props.modelValue))) ?? true
+  }
+
+  function receivePayload(state: DragState<T>, targetEntry: SortableGroupEntry<T>): SortableReceivePayload<T> {
+    return {
+      data: state.item,
+      group: state.group ?? '',
+      items: [...targetEntry.props.modelValue],
+      to: state.previewIndex,
+      toList: targetEntry.id,
+    }
+  }
+
+  // The source keeps the pointer captured, so the release that ends its drag would also click it.
+  function suppressNextClick() {
+    const root = getRootElement()
+    if (!root) return
+
+    const stop = (event: Event) => {
+      event.preventDefault()
+      event.stopImmediatePropagation()
+    }
+    root.addEventListener('click', stop, { capture: true, once: true })
+    window.setTimeout(() => root.removeEventListener('click', stop, true))
   }
 
   /** Tells every list a free drag could be dropped on that it is under way, and the one under the pointer its verdict. */
@@ -542,7 +575,7 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
     if (!state.free) return
 
     const candidates = new Set<SortableGroupEntry<T>>(state.group ? getGroupedSortableEntries<T>(state.group) : [])
-    candidates.add(groupEntry)
+    if (!external) candidates.add(groupEntry)
     for (const entry of candidates) {
       entry.setDropTarget(
         entry.props.disabled
@@ -579,6 +612,7 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
       return
     }
 
+    if (external) suppressNextClick()
     state = resolveFinalDragState(event, state)
     if (state.outside) {
       finishOutsideDrag(state)
@@ -655,7 +689,8 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
 
     const sourceEntries = entries.value
     const active = sourceEntries.find(entry => entry.key === state.key)
-    const sourceFinalEntries = sourceEntries.filter(entry => entry.key !== state.key)
+    // A source keeps what it holds: only a list gives its item away.
+    const sourceFinalEntries = external ? sourceEntries : sourceEntries.filter(entry => entry.key !== state.key)
     const targetFinalEntries = allowed && active
       ? insertEntry(targetEntry.entries(), active, state.previewIndex)
       : targetEntry.entries()
@@ -674,7 +709,11 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
 
     clearGroupPreview(state)
 
-    if (allowed && active) {
+    if (allowed && active && external) {
+      // What a source holds is not an item of the list: the list is told, and makes one of it.
+      targetEntry.emit.receive(receivePayload(state, targetEntry))
+    }
+    else if (allowed && active) {
       emit.updateModelValue(sourceFinalEntries.map(entry => entry.element))
       targetEntry.emit.updateModelValue(targetFinalEntries.map(entry => entry.element))
       emit.reorder(payload)
@@ -977,7 +1016,7 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
     // shortcut: boxes are compared, so a list clipped by a scroll container still takes the pointer over its
     // hidden part; switch to document.elementFromPoint if that matters.
     const candidates = new Set<SortableGroupEntry<T>>(group ? getGroupedSortableEntries<T>(group) : [])
-    candidates.add(groupEntry)
+    if (!external) candidates.add(groupEntry)
 
     let target: SortableGroupEntry<T> | null = null
     let targetArea = Infinity
@@ -1212,6 +1251,9 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
   }
 
   function originalTargetPosition(state: DragState<T>) {
+    const source = external ? getRootElement()?.getBoundingClientRect() : undefined
+    if (source) return { left: source.left, y: source.top }
+
     const original = state.layout.items.find(item => item.key === state.key)
     if (!original) return { left: state.left, y: state.y }
 
@@ -1670,7 +1712,7 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
   let lastRegisteredGroup: string | null = null
 
   function registerCurrentGroup(group: string | null) {
-    if (!group) return
+    if (!group || external) return
     const entriesForGroup = groupedSortables.get(group) ?? new Set<SortableGroupEntry>()
     entriesForGroup.add(groupEntry as SortableGroupEntry)
     groupedSortables.set(group, entriesForGroup)
@@ -1730,6 +1772,7 @@ export function useSortableList<T = unknown>(options: UseSortableListOptions<T>)
     getListAttrs,
     getOverlayRenderState,
     getPlaceholderAttrs,
+    handlePointerDown,
     isDragging,
     isDropping,
     isSorting,

@@ -135,6 +135,8 @@ export function mountList(
   options: {
     host?: HTMLElement
     props?: Partial<SortableProps<Item>>
+    /** Event listeners, as props: `{ onReceive: payload => … }`. */
+    listeners?: Record<string, unknown>
     geometry?: ListGeometry
     onSlot?: (slotProps: SortableDefaultSlotProps<Item>) => void
   } = {},
@@ -149,6 +151,7 @@ export function mountList(
       'motion': false,
       'onUpdate:modelValue': (value: Item[]) => wrapper.setProps({ modelValue: value }),
       ...options.props,
+      ...options.listeners,
     },
     slots: {
       default: (slotProps: SortableDefaultSlotProps<Item>) => {

@@ -70,6 +70,29 @@ export type SortableProps<T = unknown> = {
   canMove?: (payload: SortableCanMovePayload<T>) => boolean
   /** Return `false` or a string, the reason, to refuse an item coming from another list. */
   canDrop?: (payload: SortableCanMovePayload<T>) => boolean | string
+  /** Return `false` or a string, the reason, to refuse what a `SortableSource` holds. */
+  canReceive?: (payload: SortableReceivePayload<T>) => boolean | string
+}
+
+/** A `SortableSource` over, or dropped on, a list. */
+export type SortableReceivePayload<T = unknown> = {
+  /** The source's `data`. */
+  data: unknown
+  /** Where in the list it was dropped. */
+  to: number
+  toList: string
+  group: string
+  /** The receiving list's current model. */
+  items: T[]
+}
+
+export type SortableSourceProps<D = unknown> = {
+  /** What the source holds. A list it is dropped on gets it in `receive`. */
+  data: D
+  group: SortableGroup
+  disabled?: boolean
+  activation?: SortableActivation
+  motion?: SortableMotion
 }
 
 export type SortableDragPayload<T = unknown> = {
@@ -155,4 +178,11 @@ export type SortableDefaultSlotProps<T = unknown> = {
   getHandleAttrs: (entry: SortableItemEntry<T>) => Record<string, unknown>
   getPlaceholderAttrs: (entry: SortablePlaceholderEntry) => SortablePlaceholderAttrsResult
   overlay: SortableOverlayRenderState<T> | null
+}
+
+export type SortableSourceSlotProps<D = unknown> = {
+  /** Attributes for the element that is pressed to drag. */
+  sourceAttrs: Record<string, unknown>
+  dragging: boolean
+  overlay: SortableOverlayRenderState<D> | null
 }

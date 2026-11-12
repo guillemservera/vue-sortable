@@ -5,6 +5,7 @@ import { createSSRApp, h, ref } from 'vue'
 import type { Component } from 'vue'
 import { describe, expect, it } from 'vitest'
 import { Sortable } from '../src'
+import { SortableSource } from '../src'
 
 type Item = {
   id: string
@@ -73,5 +74,32 @@ describe('SSR compatibility', () => {
     expect(html).toContain('Issues')
     expect(html).toContain('Inbox')
     expect(html).toContain('data-vuesortable-root')
+  })
+})
+
+describe('SSR compatibility of the drag source', () => {
+  it('renders SortableSource on the server as its slot alone', async () => {
+    const app = createSSRApp({
+      setup() {
+        return () =>
+          h(
+            SortableSource as Component,
+            { data: { kind: 'text' }, group: 'board' },
+            {
+              default: ({ overlay, sourceAttrs }: any) => [
+                h('button', { ...sourceAttrs, type: 'button' }, 'Text'),
+                overlay ? h('div', { ...overlay.attrs, style: overlay.style }, 'Text') : null,
+              ],
+            },
+          )
+      },
+    })
+
+    const html = await renderToString(app)
+
+    expect(html).toContain('data-vuesortable-source')
+    expect(html).toContain('data-vuesortable-dragging="false"')
+    expect(html).not.toContain('data-vuesortable-overlay')
+    expect(html).not.toContain('data-vuesortable-root')
   })
 })
